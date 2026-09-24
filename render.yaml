@@ -1,0 +1,29 @@
+# Render Web Service for the operator admin dashboard.
+# Secrets (sync: false) are set in the dashboard / CLI after first create.
+services:
+  - type: web
+    name: ouro-admin-dashboard
+    runtime: node
+    region: virginia
+    plan: starter
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: MONITOR_URL
+        value: https://ouro-monitor.onrender.com
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: MONITOR_ADMIN_API_KEY
+        sync: false
