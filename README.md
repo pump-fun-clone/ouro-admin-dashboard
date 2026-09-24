@@ -4,6 +4,8 @@ Extremely simple operator UI for watching **BYOB** preference metrics (what wall
 
 This does **not** change airdrop allocation. It only monitors so you can decide later if action is needed.
 
+**Live:** https://ouro-admin-dashboard.onrender.com
+
 ## Features
 
 - Username / password login (HttpOnly signed cookie session)
@@ -35,7 +37,7 @@ ADMIN_API_KEY=long-random-secret
 On this dashboard:
 
 ```bash
-MONITOR_URL=https://your-monitor.example
+MONITOR_URL=https://ouro-monitor.onrender.com
 MONITOR_ADMIN_API_KEY=long-random-secret
 ```
 
@@ -47,7 +49,7 @@ Monitor route (Bearer `ADMIN_API_KEY`):
 
 - Dashboard login: `ADMIN_USERNAME` / `ADMIN_PASSWORD` + `SESSION_SECRET`
 - Sessions: 12h HMAC-signed cookie, `HttpOnly`, `SameSite=Lax`
-- Set `COOKIE_SECURE=1` (or `NODE_ENV=production`) behind HTTPS
+- Set `COOKIE_SECURE=1` on HTTPS deploys
 - Monitor admin key is never sent to the browser; the server proxies with it
 
 ## Scripts
