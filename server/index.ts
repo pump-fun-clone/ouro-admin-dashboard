@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import type { ViteDevServer } from "vite";
 
-import { demoByobMetrics } from "./demo";
+import { demoByobMetrics, demoByobRows } from "./demo";
 import { demoAirdrops } from "./demoAirdrops";
 import {
   mintSession,
@@ -89,7 +89,7 @@ function buildApi(): Hono {
     }
 
     try {
-      const res = await fetch(`${monitorUrl}/v1/admin/byob/metrics?auditLimit=200`, {
+      const res = await fetch(`${monitorUrl}/v1/admin/byob/metrics`, {
         headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
       });
       const text = await res.text();
@@ -103,6 +103,48 @@ function buildApi(): Hono {
         return c.json({ error: "monitor error", status: res.status, body }, 502);
       }
       return c.json({ ...(body as object), source: "monitor" as const });
+    } catch (e) {
+      return c.json({ error: "failed to reach monitor", detail: (e as Error).message }, 502);
+    }
+  });
+
+  app.get("/api/byob/rows", async (c) => {
+    if (!currentUser(c.req.header("cookie"))) return c.json({ error: "unauthorized" }, 401);
+
+    const table = (c.req.query("table") || "").trim().toLowerCase();
+    const limitRaw = c.req.query("limit");
+    const offsetRaw = c.req.query("offset");
+    const q = c.req.query("q") || "";
+    const limit = Math.min(100, Math.max(1, Number.parseInt(limitRaw || "15", 10) || 15));
+    const offset = Math.max(0, Number.parseInt(offsetRaw || "0", 10) || 0);
+
+    if (!monitorUrl || !monitorKey) {
+      const demo = demoByobRows(table, limit, offset, q);
+      if ("error" in demo && demo.error) return c.json(demo, 400);
+      return c.json(demo);
+    }
+
+    try {
+      const params = new URLSearchParams({
+        table,
+        limit: String(limit),
+        offset: String(offset),
+        q,
+      });
+      const res = await fetch(`${monitorUrl}/v1/admin/byob/rows?${params}`, {
+        headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
+      });
+      const text = await res.text();
+      let body: unknown;
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        return c.json({ error: "monitor returned non-JSON", status: res.status }, 502);
+      }
+      if (!res.ok) {
+        return c.json({ error: "monitor error", status: res.status, body }, 502);
+      }
+      return c.json(body);
     } catch (e) {
       return c.json({ error: "failed to reach monitor", detail: (e as Error).message }, 502);
     }

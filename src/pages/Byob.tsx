@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { CohortDonuts } from "../components/CohortDonuts";
 import { TipPanel, TipRow, tipHandlers, useTip } from "../lib/tooltip";
@@ -41,31 +41,47 @@ export type ByobMetrics = {
     byobDemandBpsOfPot?: number;
     classicRemainderBpsOfPot?: number;
   }[];
-  allInOneToken: { address: string; symbol: string; weightBps: number }[];
-  recentAudit: {
-    id: number;
-    address: string;
-    kind: string;
-    cycle: number;
-    ts: number;
-    weights: unknown;
-  }[];
-  pending: {
-    address: string;
-    classic: boolean;
-    weights: Record<string, number> | null;
-    submittedCycle: number;
-    effectiveFromCycle: number;
-    submittedAt: number;
-    ouro?: string | null;
-  }[];
-  active: {
-    address: string;
-    weights: Record<string, number> | null;
-    updatedAt: number;
-    updatedCycle: number;
-    ouro?: string | null;
-  }[];
+  allInOneTokenCount?: number;
+};
+
+type ActiveRow = {
+  address: string;
+  weights: Record<string, number> | null;
+  updatedAt: number;
+  updatedCycle: number;
+  ouro?: string | null;
+};
+type PendingRow = {
+  address: string;
+  classic: boolean;
+  weights: Record<string, number> | null;
+  submittedCycle: number;
+  effectiveFromCycle: number;
+  submittedAt: number;
+  ouro?: string | null;
+};
+type AuditRow = {
+  id: number;
+  address: string;
+  kind: string;
+  cycle: number;
+  ts: number;
+  weights: unknown;
+};
+type AllInRow = { address: string; symbol: string; weightBps: number };
+
+type ByobTable = "active" | "pending" | "audit" | "all_in";
+
+type PageResult<T> = {
+  rows: T[];
+  total: number;
+  page: number;
+  pageCount: number;
+  query: string;
+  setQuery: (q: string) => void;
+  setPage: (p: number) => void;
+  loading: boolean;
+  err: string | null;
 };
 
 const PAGE_SIZE = 15;
@@ -137,17 +153,75 @@ function AddrLink({ address, explorer }: { address: string; explorer?: string })
   );
 }
 
-function usePaged<T>(rows: T[], query: string, match: (row: T, q: string) => boolean) {
+function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> {
   const [page, setPage] = useState(0);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => match(r, q));
-  }, [rows, query, match]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const [query, setQueryState] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [rows, setRows] = useState<T[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(query.trim()), 200);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const offset = page * PAGE_SIZE;
+    const params = new URLSearchParams({
+      table,
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+      q: debouncedQ,
+    });
+    setLoading(true);
+    setErr(null);
+    void fetch(`/api/byob/rows?${params}`, { credentials: "include" })
+      .then(async (res) => {
+        const body = (await res.json()) as { rows?: T[]; total?: number; error?: string };
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        if (cancelled) return;
+        setRows(body.rows ?? []);
+        setTotal(body.total ?? 0);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setErr((e as Error).message);
+        setRows([]);
+        setTotal(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [table, page, debouncedQ, refreshKey]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
-  const slice = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
-  return { filtered, slice, page: safePage, setPage, pageCount, total: filtered.length };
+
+  const setQuery = useCallback((q: string) => {
+    setQueryState(q);
+  }, []);
+
+  return {
+    rows,
+    total,
+    page: safePage,
+    pageCount,
+    query,
+    setQuery,
+    setPage,
+    loading,
+    err,
+  };
 }
 
 function TableToolbar({
@@ -158,6 +232,7 @@ function TableToolbar({
   pageCount,
   onPage,
   placeholder,
+  loading,
 }: {
   query: string;
   onQuery: (v: string) => void;
@@ -166,6 +241,7 @@ function TableToolbar({
   pageCount: number;
   onPage: (p: number) => void;
   placeholder: string;
+  loading?: boolean;
 }) {
   return (
     <div className="table-tools">
@@ -173,23 +249,20 @@ function TableToolbar({
         className="search"
         type="search"
         value={query}
-        onChange={(e) => {
-          onQuery(e.target.value);
-          onPage(0);
-        }}
+        onChange={(e) => onQuery(e.target.value)}
         placeholder={placeholder}
       />
       <div className="pager">
         <span className="muted">
-          {total} · page {page + 1}/{pageCount}
+          {loading ? "…" : total} · page {page + 1}/{pageCount}
         </span>
-        <button type="button" className="btn ghost sm" disabled={page <= 0} onClick={() => onPage(page - 1)}>
+        <button type="button" className="btn ghost sm" disabled={page <= 0 || loading} onClick={() => onPage(page - 1)}>
           Prev
         </button>
         <button
           type="button"
           className="btn ghost sm"
-          disabled={page >= pageCount - 1}
+          disabled={page >= pageCount - 1 || loading}
           onClick={() => onPage(page + 1)}
         >
           Next
@@ -199,42 +272,15 @@ function TableToolbar({
   );
 }
 
-export function ByobPage({ data }: { data: ByobMetrics }) {
+export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshKey?: number }) {
   const tip = useTip();
   const explorer = data.explorer || EXPLORER_FALLBACK;
   const cohort = data.cohort;
 
-  const [activeQ, setActiveQ] = useState("");
-  const [pendingQ, setPendingQ] = useState("");
-  const [allInQ, setAllInQ] = useState("");
-  const [auditQ, setAuditQ] = useState("");
-
-  const activeMatch = useMemo(
-    () => (r: ByobMetrics["active"][number], q: string) =>
-      r.address.toLowerCase().includes(q) || weightLine(r.weights, data.basket).toLowerCase().includes(q),
-    [data.basket],
-  );
-  const pendingMatch = useMemo(
-    () => (r: ByobMetrics["pending"][number], q: string) =>
-      r.address.toLowerCase().includes(q) ||
-      (r.classic ? "classic" : weightLine(r.weights, data.basket)).toLowerCase().includes(q),
-    [data.basket],
-  );
-  const allInMatch = useMemo(
-    () => (r: ByobMetrics["allInOneToken"][number], q: string) =>
-      r.address.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q),
-    [],
-  );
-  const auditMatch = useMemo(
-    () => (r: ByobMetrics["recentAudit"][number], q: string) =>
-      r.address.toLowerCase().includes(q) || r.kind.toLowerCase().includes(q) || String(r.cycle).includes(q),
-    [],
-  );
-
-  const activePaged = usePaged(data.active, activeQ, activeMatch);
-  const pendingPaged = usePaged(data.pending, pendingQ, pendingMatch);
-  const allInPaged = usePaged(data.allInOneToken, allInQ, allInMatch);
-  const auditPaged = usePaged(data.recentAudit, auditQ, auditMatch);
+  const activePaged = useServerPaged<ActiveRow>("active", refreshKey);
+  const pendingPaged = useServerPaged<PendingRow>("pending", refreshKey);
+  const allInPaged = useServerPaged<AllInRow>("all_in", refreshKey);
+  const auditPaged = useServerPaged<AuditRow>("audit", refreshKey);
 
   return (
     <div className="stack">
@@ -322,15 +368,17 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           <h2>All-in wallets</h2>
         </div>
         <TableToolbar
-          query={allInQ}
-          onQuery={setAllInQ}
+          query={allInPaged.query}
+          onQuery={allInPaged.setQuery}
           total={allInPaged.total}
           page={allInPaged.page}
           pageCount={allInPaged.pageCount}
           onPage={allInPaged.setPage}
           placeholder="Filter address or token…"
+          loading={allInPaged.loading}
         />
-        {allInPaged.total === 0 ? (
+        {allInPaged.err ? <p className="err">{allInPaged.err}</p> : null}
+        {allInPaged.total === 0 && !allInPaged.loading ? (
           <p className="muted">None at 100% one token.</p>
         ) : (
           <table>
@@ -341,7 +389,7 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
               </tr>
             </thead>
             <tbody>
-              {allInPaged.slice.map((r) => (
+              {allInPaged.rows.map((r) => (
                 <tr key={`${r.address}-${r.symbol}`}>
                   <td>
                     <AddrLink address={r.address} explorer={explorer} />
@@ -359,14 +407,16 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           <h2>Active prefs</h2>
         </div>
         <TableToolbar
-          query={activeQ}
-          onQuery={setActiveQ}
+          query={activePaged.query}
+          onQuery={activePaged.setQuery}
           total={activePaged.total}
           page={activePaged.page}
           pageCount={activePaged.pageCount}
           onPage={activePaged.setPage}
           placeholder="Filter address or weights…"
+          loading={activePaged.loading}
         />
+        {activePaged.err ? <p className="err">{activePaged.err}</p> : null}
         <table>
           <thead>
             <tr>
@@ -377,7 +427,7 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
             </tr>
           </thead>
           <tbody>
-            {activePaged.slice.map((r) => (
+            {activePaged.rows.map((r) => (
               <tr key={r.address}>
                 <td>
                   <AddrLink address={r.address} explorer={explorer} />
@@ -396,15 +446,17 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           <h2>Pending</h2>
         </div>
         <TableToolbar
-          query={pendingQ}
-          onQuery={setPendingQ}
+          query={pendingPaged.query}
+          onQuery={pendingPaged.setQuery}
           total={pendingPaged.total}
           page={pendingPaged.page}
           pageCount={pendingPaged.pageCount}
           onPage={pendingPaged.setPage}
           placeholder="Filter address or change…"
+          loading={pendingPaged.loading}
         />
-        {pendingPaged.total === 0 ? (
+        {pendingPaged.err ? <p className="err">{pendingPaged.err}</p> : null}
+        {pendingPaged.total === 0 && !pendingPaged.loading ? (
           <p className="muted">No pending changes.</p>
         ) : (
           <table>
@@ -416,7 +468,7 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
               </tr>
             </thead>
             <tbody>
-              {pendingPaged.slice.map((r) => (
+              {pendingPaged.rows.map((r) => (
                 <tr key={r.address}>
                   <td>
                     <AddrLink address={r.address} explorer={explorer} />
@@ -435,15 +487,17 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           <h2>Recent audit</h2>
         </div>
         <TableToolbar
-          query={auditQ}
-          onQuery={setAuditQ}
+          query={auditPaged.query}
+          onQuery={auditPaged.setQuery}
           total={auditPaged.total}
           page={auditPaged.page}
           pageCount={auditPaged.pageCount}
           onPage={auditPaged.setPage}
           placeholder="Filter address, kind, cycle…"
+          loading={auditPaged.loading}
         />
-        {auditPaged.total === 0 ? (
+        {auditPaged.err ? <p className="err">{auditPaged.err}</p> : null}
+        {auditPaged.total === 0 && !auditPaged.loading ? (
           <p className="muted">No audit rows yet.</p>
         ) : (
           <table>
@@ -456,7 +510,7 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
               </tr>
             </thead>
             <tbody>
-              {auditPaged.slice.map((r) => (
+              {auditPaged.rows.map((r) => (
                 <tr key={r.id}>
                   <td className="muted">{when(r.ts)}</td>
                   <td>{r.kind}</td>

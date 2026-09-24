@@ -1,9 +1,70 @@
 /** Demo BYOB metrics when MONITOR_URL is unset (local UI work without a live monitor). */
+
+const cash = "0x1111111111111111111111111111111111111111";
+const pons = "0x2222222222222222222222222222222222222222";
+const ai = "0x3333333333333333333333333333333333333333";
+const ouro = (n: number) => BigInt(Math.floor(n * 1e18)).toString();
+
+const demoActive = [
+  {
+    address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
+    updatedAt: Math.floor(Date.now() / 1000) - 86400,
+    updatedCycle: 200,
+    ouro: ouro(800_000),
+  },
+  {
+    address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
+    updatedAt: Math.floor(Date.now() / 1000) - 72000,
+    updatedCycle: 201,
+    ouro: ouro(600_000),
+  },
+  {
+    address: "0xeeeeaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    weights: { [cash]: 3334, [pons]: 3333, [ai]: 3333 },
+    updatedAt: Math.floor(Date.now() / 1000) - 40000,
+    updatedCycle: 205,
+    ouro: ouro(500_000),
+  },
+  {
+    address: "0xffffffffffffffffffffffffffffffffffffffff",
+    weights: { [cash]: 1666, [pons]: 3334, [ai]: 5000 },
+    updatedAt: Math.floor(Date.now() / 1000) - 10000,
+    updatedCycle: 206,
+    ouro: ouro(500_000),
+  },
+];
+
+const demoPending = [
+  {
+    address: "0xddddaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    classic: false,
+    weights: { [cash]: 5000, [pons]: 5000, [ai]: 0 },
+    submittedCycle: 207,
+    effectiveFromCycle: 209,
+    submittedAt: Math.floor(Date.now() / 1000) - 1800,
+    ouro: ouro(150_000),
+  },
+];
+
+const demoAudit = [
+  {
+    id: 3,
+    address: "0xccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    kind: "pending",
+    cycle: 207,
+    ts: Math.floor(Date.now() / 1000) - 3600,
+    weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
+  },
+];
+
+const demoAllIn = [
+  { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", symbol: "CASHCAT", weightBps: 10000 },
+  { address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", symbol: "CASHCAT", weightBps: 10000 },
+];
+
 export function demoByobMetrics() {
-  const cash = "0x1111111111111111111111111111111111111111";
-  const pons = "0x2222222222222222222222222222222222222222";
-  const ai = "0x3333333333333333333333333333333333333333";
-  const ouro = (n: number) => BigInt(Math.floor(n * 1e18)).toString();
   return {
     cycle: 208,
     delayCycles: 2,
@@ -13,11 +74,11 @@ export function demoByobMetrics() {
       { symbol: "PONS", address: pons, decimals: 18 },
       { symbol: "AI", address: ai, decimals: 18 },
     ],
-    activeCount: 4,
-    alignedActiveCount: 4,
-    pendingCount: 1,
+    activeCount: demoActive.length,
+    alignedActiveCount: demoActive.length,
+    pendingCount: demoPending.length,
     pendingClassicCount: 0,
-    pendingCustomCount: 1,
+    pendingCustomCount: demoPending.length,
     cohort: {
       eligibleWallets: 40,
       byobWallets: 4,
@@ -75,60 +136,82 @@ export function demoByobMetrics() {
         classicRemainderBpsOfPot: 9200,
       },
     ],
-    allInOneToken: [
-      { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", symbol: "CASHCAT", weightBps: 10000 },
-      { address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", symbol: "CASHCAT", weightBps: 10000 },
-    ],
-    recentAudit: [
-      {
-        id: 3,
-        address: "0xccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        kind: "pending",
-        cycle: 207,
-        ts: Math.floor(Date.now() / 1000) - 3600,
-        weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
-      },
-    ],
-    pending: [
-      {
-        address: "0xddddaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        classic: false,
-        weights: { [cash]: 5000, [pons]: 5000, [ai]: 0 },
-        submittedCycle: 207,
-        effectiveFromCycle: 209,
-        submittedAt: Math.floor(Date.now() / 1000) - 1800,
-        ouro: ouro(150_000),
-      },
-    ],
-    active: [
-      {
-        address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
-        updatedAt: Math.floor(Date.now() / 1000) - 86400,
-        updatedCycle: 200,
-        ouro: ouro(800_000),
-      },
-      {
-        address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
-        updatedAt: Math.floor(Date.now() / 1000) - 72000,
-        updatedCycle: 201,
-        ouro: ouro(600_000),
-      },
-      {
-        address: "0xeeeeaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        weights: { [cash]: 3334, [pons]: 3333, [ai]: 3333 },
-        updatedAt: Math.floor(Date.now() / 1000) - 40000,
-        updatedCycle: 205,
-        ouro: ouro(500_000),
-      },
-      {
-        address: "0xffffffffffffffffffffffffffffffffffffffff",
-        weights: { [cash]: 1666, [pons]: 3334, [ai]: 5000 },
-        updatedAt: Math.floor(Date.now() / 1000) - 10000,
-        updatedCycle: 206,
-        ouro: ouro(500_000),
-      },
-    ],
+    allInOneTokenCount: demoAllIn.length,
+    allInOneToken: [],
+    recentAudit: [],
+    pending: [],
+    active: [],
   };
+}
+
+function pageRows<T>(rows: T[], limit: number, offset: number, match: (row: T, q: string) => boolean, q: string) {
+  const needle = q.trim().toLowerCase();
+  const filtered = needle ? rows.filter((r) => match(r, needle)) : rows;
+  return {
+    total: filtered.length,
+    limit,
+    offset,
+    q: needle,
+    rows: filtered.slice(offset, offset + limit),
+  };
+}
+
+/** Demo stand-in for GET /api/byob/rows. */
+export function demoByobRows(table: string, limit: number, offset: number, q: string) {
+  const kind = table.trim().toLowerCase();
+  if (kind === "active") {
+    return {
+      table: kind,
+      ...pageRows(
+        demoActive,
+        limit,
+        offset,
+        (r, needle) =>
+          r.address.toLowerCase().includes(needle) || JSON.stringify(r.weights).toLowerCase().includes(needle),
+        q,
+      ),
+    };
+  }
+  if (kind === "pending") {
+    return {
+      table: kind,
+      ...pageRows(
+        demoPending,
+        limit,
+        offset,
+        (r, needle) =>
+          r.address.toLowerCase().includes(needle) ||
+          (r.classic ? "classic" : JSON.stringify(r.weights)).toLowerCase().includes(needle),
+        q,
+      ),
+    };
+  }
+  if (kind === "audit") {
+    return {
+      table: kind,
+      ...pageRows(
+        demoAudit,
+        limit,
+        offset,
+        (r, needle) =>
+          r.address.toLowerCase().includes(needle) ||
+          r.kind.toLowerCase().includes(needle) ||
+          String(r.cycle).includes(needle),
+        q,
+      ),
+    };
+  }
+  if (kind === "all_in") {
+    return {
+      table: kind,
+      ...pageRows(
+        demoAllIn,
+        limit,
+        offset,
+        (r, needle) => r.address.toLowerCase().includes(needle) || r.symbol.toLowerCase().includes(needle),
+        q,
+      ),
+    };
+  }
+  return { error: "table must be active|pending|audit|all_in", table: kind, total: 0, limit, offset, q, rows: [] };
 }

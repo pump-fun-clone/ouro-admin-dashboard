@@ -96,7 +96,7 @@ function Donut({
       <div
         className="donut"
         style={{
-          background: `conic-gradient(var(--accent) 0 ${aPct}%, #3a3832 ${aPct}% 100%)`,
+          background: `conic-gradient(var(--accent) 0 ${aPct}%, var(--classic) ${aPct}% 100%)`,
         }}
         aria-hidden
       />

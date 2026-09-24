@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
+import { ThemeToggle } from "./components/ThemeToggle";
 import { TooltipProvider } from "./lib/tooltip";
 import { AirdropsPage, type AirdropsData } from "./pages/Airdrops";
 import { ByobPage, type ByobMetrics } from "./pages/Byob";
@@ -76,6 +77,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
   const [airdrops, setAirdrops] = useState<AirdropsData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -95,6 +97,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
       if (!aRes.ok) throw new Error(aBody.error || `Airdrops HTTP ${aRes.status}`);
       setMetrics(mBody);
       setAirdrops(aBody);
+      setRefreshKey((k) => k + 1);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -120,6 +123,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
         </div>
         <div className="top-right">
           <span className="muted">{username}</span>
+          <ThemeToggle />
           <button type="button" className="btn ghost" onClick={() => void load()} disabled={loading}>
             Refresh
           </button>
@@ -144,7 +148,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
 
       {err ? <p className="err">{err}</p> : null}
       {loading && !metrics && !airdrops ? <p className="muted">Loading…</p> : null}
-      {tab === "byob" && metrics ? <ByobPage data={metrics} /> : null}
+      {tab === "byob" && metrics ? <ByobPage data={metrics} refreshKey={refreshKey} /> : null}
       {tab === "airdrops" && airdrops ? (
         <AirdropsPage data={airdrops} cohort={metrics?.cohort} />
       ) : null}

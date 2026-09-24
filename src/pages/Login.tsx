@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 
+import { ThemeToggle } from "../components/ThemeToggle";
+
 export function LoginPage({ onSuccess }: { onSuccess: (username: string) => void }) {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -30,7 +32,10 @@ export function LoginPage({ onSuccess }: { onSuccess: (username: string) => void
   return (
     <div className="login-wrap">
       <form className="login" onSubmit={(e) => void onSubmit(e)}>
-        <h1>Ouro Admin</h1>
+        <div className="login-head">
+          <h1>Ouro Admin</h1>
+          <ThemeToggle />
+        </div>
         <p className="muted">Operator login. Not for public wallets.</p>
         <label>
           Username
