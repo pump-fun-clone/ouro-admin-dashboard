@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
+import { TooltipProvider } from "./lib/tooltip";
 import { AirdropsPage, type AirdropsData } from "./pages/Airdrops";
 import { ByobPage, type ByobMetrics } from "./pages/Byob";
 import { LoginPage } from "./pages/Login";
@@ -41,29 +42,31 @@ export function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          me.authenticated ? (
-            <Navigate to="/" replace />
-          ) : (
-            <LoginPage onSuccess={(username) => setMe({ authenticated: true, username })} />
-          )
-        }
-      />
-      <Route
-        path="/"
-        element={
-          me.authenticated ? (
-            <AuthedShell username={me.username} onLogout={() => setMe({ authenticated: false })} />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <TooltipProvider>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            me.authenticated ? (
+              <Navigate to="/" replace />
+            ) : (
+              <LoginPage onSuccess={(username) => setMe({ authenticated: true, username })} />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={
+            me.authenticated ? (
+              <AuthedShell username={me.username} onLogout={() => setMe({ authenticated: false })} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </TooltipProvider>
   );
 }
 
@@ -142,7 +145,9 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
       {err ? <p className="err">{err}</p> : null}
       {loading && !metrics && !airdrops ? <p className="muted">Loading…</p> : null}
       {tab === "byob" && metrics ? <ByobPage data={metrics} /> : null}
-      {tab === "airdrops" && airdrops ? <AirdropsPage data={airdrops} /> : null}
+      {tab === "airdrops" && airdrops ? (
+        <AirdropsPage data={airdrops} cohort={metrics?.cohort} />
+      ) : null}
     </div>
   );
 }

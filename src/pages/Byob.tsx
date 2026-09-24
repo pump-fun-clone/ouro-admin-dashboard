@@ -1,4 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
+
+import { CohortDonuts } from "../components/CohortDonuts";
+import { tipHandlers, useTip } from "../lib/tooltip";
 
 export type ByobMetrics = {
   source?: "demo" | "monitor";
@@ -120,45 +123,17 @@ function explorerUrl(base: string | undefined, address: string): string {
 }
 
 function AddrLink({ address, explorer }: { address: string; explorer?: string }) {
+  const tip = useTip();
   return (
-    <a className="mono addr-link" href={explorerUrl(explorer, address)} target="_blank" rel="noreferrer">
+    <a
+      className="mono addr-link"
+      href={explorerUrl(explorer, address)}
+      target="_blank"
+      rel="noreferrer"
+      {...tipHandlers(tip, address)}
+    >
       {shortAddr(address)}
     </a>
-  );
-}
-
-function Donut({
-  a,
-  b,
-  aLabel,
-  bLabel,
-}: {
-  a: number;
-  b: number;
-  aLabel: string;
-  bLabel: string;
-}) {
-  const total = a + b;
-  const aPct = total > 0 ? (a / total) * 100 : 50;
-  return (
-    <div className="donut-wrap">
-      <div
-        className="donut"
-        style={{
-          background: `conic-gradient(var(--accent) 0 ${aPct}%, #3a3832 ${aPct}% 100%)`,
-        }}
-        aria-hidden
-      />
-      <div className="donut-legend">
-        <div>
-          <span className="swatch byob" /> {aLabel} <strong>{total ? pct(Math.round((a / total) * 10000)) : "—"}</strong>
-        </div>
-        <div>
-          <span className="swatch classic" /> {bLabel}{" "}
-          <strong>{total ? pct(Math.round((b / total) * 10000)) : "—"}</strong>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -225,6 +200,7 @@ function TableToolbar({
 }
 
 export function ByobPage({ data }: { data: ByobMetrics }) {
+  const tip = useTip();
   const explorer = data.explorer || EXPLORER_FALLBACK;
   const cohort = data.cohort;
 
@@ -282,47 +258,13 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
         </div>
       </section>
 
-      <div className="charts-row">
+      {cohort ? (
+        <CohortDonuts cohort={cohort} />
+      ) : (
         <section className="panel">
-          <div className="panel-head">
-            <h2>Classic vs BYOB (wallets)</h2>
-          </div>
-          {cohort ? (
-            <>
-              <Donut
-                a={cohort.byobWallets}
-                b={cohort.classicWallets}
-                aLabel={`BYOB ${cohort.byobWallets}`}
-                bLabel={`Classic ${cohort.classicWallets}`}
-              />
-              <p className="muted tight">Eligible holders at or above the airdrop line.</p>
-            </>
-          ) : (
-            <p className="muted">Cohort data unavailable.</p>
-          )}
+          <p className="muted">Cohort data unavailable.</p>
         </section>
-
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Classic vs BYOB (OURO)</h2>
-          </div>
-          {cohort ? (
-            <>
-              <Donut
-                a={cohort.byobOuroShareBps}
-                b={cohort.classicOuroShareBps}
-                aLabel={`BYOB ${pct(cohort.byobOuroShareBps)}`}
-                bLabel={`Classic ${pct(cohort.classicOuroShareBps)}`}
-              />
-              <p className="muted tight">
-                Share of eligible OURO · BYOB {fmtOuro(cohort.byobOuro)} / Classic {fmtOuro(cohort.classicOuro)}
-              </p>
-            </>
-          ) : (
-            <p className="muted">Cohort data unavailable.</p>
-          )}
-        </section>
-      </div>
+      )}
 
       <section className="panel">
         <div className="panel-head">
@@ -336,8 +278,9 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           {data.tokens.map((t) => {
             const demand = t.byobDemandBpsOfPot ?? 0;
             const rem = t.classicRemainderBpsOfPot ?? Math.max(0, 10_000 - demand);
+            const tipText = `${t.symbol}: pot ${fmtNum(t.potAmount)}${t.potUsd != null ? ` ($${fmtNum(t.potUsd)})` : ""} · BYOB claims ${pct(demand)} · classic left ${pct(rem)} · pref avg ${pct(t.avgWeightBps)} · ${t.walletsAt100pct} all-in`;
             return (
-              <div key={t.address} className="pot-card">
+              <div key={t.address} className="pot-card" {...tipHandlers(tip, tipText)}>
                 <div className="pot-top">
                   <strong>{t.symbol}</strong>
                   <span className="muted">
@@ -528,6 +471,3 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-// silence unused ReactNode if any
-void 0 as unknown as ReactNode;

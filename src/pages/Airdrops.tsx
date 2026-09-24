@@ -1,5 +1,9 @@
 import { Fragment, useMemo, useState } from "react";
 
+import { CohortDonuts } from "../components/CohortDonuts";
+import { tipHandlers, useTip } from "../lib/tooltip";
+import type { ByobMetrics } from "./Byob";
+
 export type AirdropAsset = {
   address: string;
   symbol: string | null;
@@ -95,7 +99,14 @@ function txUrl(explorer: string, tx: string): string {
   return `${explorer.replace(/\/+$/, "")}/tx/${tx}`;
 }
 
-export function AirdropsPage({ data }: { data: AirdropsData }) {
+export function AirdropsPage({
+  data,
+  cohort,
+}: {
+  data: AirdropsData;
+  cohort?: ByobMetrics["cohort"];
+}) {
+  const tip = useTip();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [open, setOpen] = useState<number | null>(null);
@@ -132,8 +143,8 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
       const hay = [
         String(e.epoch),
         e.status,
-        ...(e.assets.map((a) => a.symbol || "")),
-        ...((e.meta.txs as string[] | undefined) || []).map((t) => t),
+        ...e.assets.map((a) => a.symbol || ""),
+        ...((e.meta.txs as string[] | undefined) || []),
         ...e.payouts.map((p) => p.tx),
       ]
         .join(" ")
@@ -162,8 +173,12 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
           <Stat label="Paid (sum)" value={fmtUsd(totals.paid)} />
           <Stat label="Avg / cycle" value={fmtUsd(totals.avg)} />
           <Stat label="Recipients (sum)" value={totals.recipients.toLocaleString()} />
+          <Stat label="BYOB wallets" value={cohort ? String(cohort.byobWallets) : "—"} />
+          <Stat label="Classic wallets" value={cohort ? String(cohort.classicWallets) : "—"} />
         </div>
       </section>
+
+      {cohort ? <CohortDonuts cohort={cohort} /> : null}
 
       <div className="charts-row">
         <section className="panel">
@@ -176,18 +191,20 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
               const paid = e.paidUsd ?? assets.reduce((s, a) => s + (a.usd ?? 0), 0);
               const colH = (paid / maxPaid) * 100;
               const assetSum = assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
+              const breakdown = assets.map((a) => `${a.symbol} ${fmtUsd(a.usd)} (${fmtAmt(a.amountF)})`).join(" · ");
+              const colTip = `#${e.epoch} · ${fmtUsd(e.paidUsd)} · ${e.recipients ?? "—"} recipients · ${breakdown}`;
               return (
-                <div key={e.epoch} className="hist-col" title={`#${e.epoch} ${fmtUsd(e.paidUsd)}`}>
-                  <div className="hist-stack" style={{ height: `${colH}%` }}>
+                <div key={e.epoch} className="hist-col" {...tipHandlers(tip, colTip)}>
+                  <div className="hist-stack" style={{ height: `${Math.max(colH, 2)}%` }}>
                     {assets.map((a) => (
                       <div
                         key={a.address}
                         className="hist-seg"
                         style={{
-                          flex: `${(a.usd ?? 0) / assetSum} 0 0`,
+                          flex: `${Math.max(a.usd ?? 0, 0.0001) / assetSum} 0 0`,
                           background: tokenColor(a.symbol),
                         }}
-                        title={`${a.symbol}: ${fmtUsd(a.usd)} (${fmtAmt(a.amountF)})`}
+                        {...tipHandlers(tip, `${a.symbol}: ${fmtUsd(a.usd)} · ${fmtAmt(a.amountF)} tokens`)}
                       />
                     ))}
                   </div>
@@ -198,7 +215,7 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
           </div>
           <div className="token-legend">
             {totals.bySym.map(([sym]) => (
-              <span key={sym}>
+              <span key={sym} {...tipHandlers(tip, sym)}>
                 <span className="swatch" style={{ background: tokenColor(sym) }} />
                 {sym}
               </span>
@@ -211,15 +228,18 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
             <h2>Daily paid</h2>
           </div>
           <div className="hist-bars daily" aria-label="Daily paid USD">
-            {data.days.map((d) => (
-              <div key={d.day} className="hist-col" title={`${dayLabel(d.day)} ${fmtUsd(d.paid_usd)}`}>
-                <div
-                  className="hist-bar-solid"
-                  style={{ height: `${((d.paid_usd ?? 0) / dayMax) * 100}%` }}
-                />
-                <span className="hist-label">{dayLabel(d.day)}</span>
-              </div>
-            ))}
+            {data.days.map((d) => {
+              const t = `${dayLabel(d.day)} · ${fmtUsd(d.paid_usd)} · ${d.epochs} cycles · ${(d.recipients ?? 0).toLocaleString()} recipients`;
+              return (
+                <div key={d.day} className="hist-col" {...tipHandlers(tip, t)}>
+                  <div
+                    className="hist-bar-solid"
+                    style={{ height: `${Math.max(((d.paid_usd ?? 0) / dayMax) * 100, 2)}%` }}
+                  />
+                  <span className="hist-label">{dayLabel(d.day)}</span>
+                </div>
+              );
+            })}
           </div>
           <p className="muted tight">Last {data.days.length} days of closed airdrop USD.</p>
         </section>
@@ -231,7 +251,11 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
         </div>
         <div className="pot-grid">
           {totals.bySym.map(([sym, v]) => (
-            <div key={sym} className="pot-card">
+            <div
+              key={sym}
+              className="pot-card"
+              {...tipHandlers(tip, `${sym}: ${fmtUsd(v.usd)} · ${fmtAmt(v.amountF)} tokens across ${totals.cycles} cycles`)}
+            >
               <div className="pot-top">
                 <strong>
                   <span className="swatch" style={{ background: tokenColor(sym) }} />
@@ -239,7 +263,9 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
                 </strong>
                 <span className="muted">{fmtUsd(v.usd)}</span>
               </div>
-              <div className="muted tiny">{fmtAmt(v.amountF)} tokens across {totals.cycles} cycles</div>
+              <div className="muted tiny">
+                {fmtAmt(v.amountF)} tokens across {totals.cycles} cycles
+              </div>
             </div>
           ))}
         </div>
@@ -313,7 +339,7 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
                     <td>{fmtUsd(e.paidUsd)}</td>
                     <td className="muted">{e.recipients?.toLocaleString() ?? "—"}</td>
                     <td>
-                      <div className="mini-stack" title="USD share by token">
+                      <div className="mini-stack">
                         {e.assets.map((a) => (
                           <div
                             key={a.address}
@@ -321,7 +347,7 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
                               width: `${((a.usd ?? 0) / assetSum) * 100}%`,
                               background: tokenColor(a.symbol),
                             }}
-                            title={`${a.symbol}: ${fmtUsd(a.usd)}`}
+                            {...tipHandlers(tip, `${a.symbol}: ${fmtUsd(a.usd)} · ${fmtAmt(a.amountF)}`)}
                           />
                         ))}
                       </div>
@@ -373,6 +399,7 @@ export function AirdropsPage({ data }: { data: AirdropsData }) {
                                 href={txUrl(data.explorer, tx)}
                                 target="_blank"
                                 rel="noreferrer"
+                                {...tipHandlers(tip, tx)}
                               >
                                 {shortTx(tx)}
                               </a>
