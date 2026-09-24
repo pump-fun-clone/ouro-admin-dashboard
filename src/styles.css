@@ -286,6 +286,21 @@ body {
   margin-bottom: 14px;
 }
 
+.detail-subhead {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted, #8a857c);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.byob-token-line {
+  margin-top: 4px;
+  max-width: 42rem;
+  line-height: 1.35;
+}
+
 .pot-meta {
   display: flex;
   justify-content: space-between;

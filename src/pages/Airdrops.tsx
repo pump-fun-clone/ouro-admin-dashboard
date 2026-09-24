@@ -14,6 +14,18 @@ export type AirdropAsset = {
   recipients: number | null;
 };
 
+export type EpochByobAssetSplit = {
+  address: string;
+  symbol: string | null;
+  byobRecipients: number;
+  classicRecipients: number;
+  byobAmountF: number;
+  classicAmountF: number;
+  byobUsd: number | null;
+  classicUsd: number | null;
+  byobShareBps: number | null;
+};
+
 export type EpochByobSplit = {
   byobRecipients: number;
   classicRecipients: number;
@@ -21,6 +33,7 @@ export type EpochByobSplit = {
   classicUsd: number | null;
   byobShareBps: number | null;
   receiptRecipients: number;
+  assets?: EpochByobAssetSplit[];
 };
 
 export type AirdropEpoch = {
@@ -80,14 +93,18 @@ function fmtUsd(n: number | null | undefined): string {
 
 function byobTip(b: EpochByobSplit | undefined): string {
   if (!b) return "No BYOB split for this cycle (needs admin receipts)";
-  return [
+  const lines = [
     `BYOB ${b.byobRecipients} recipients · ${fmtUsd(b.byobUsd)}`,
     `Classic ${b.classicRecipients} recipients · ${fmtUsd(b.classicUsd)}`,
     `BYOB share ${pctBps(b.byobShareBps)} of paid USD`,
-    b.receiptRecipients ? `${b.receiptRecipients} receipt recipients` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ];
+  for (const a of b.assets ?? []) {
+    const sym = a.symbol || a.address.slice(0, 8);
+    lines.push(
+      `${sym}: BYOB ${fmtAmt(a.byobAmountF)} (${fmtUsd(a.byobUsd)}) · Classic ${fmtAmt(a.classicAmountF)} (${fmtUsd(a.classicUsd)}) · ${pctBps(a.byobShareBps)} BYOB`,
+    );
+  }
+  return lines.join("\n");
 }
 
 function fmtAmt(n: number | null | undefined): string {
@@ -427,6 +444,14 @@ export function AirdropsPage({
                       <div className="muted tiny">
                         {e.assets.map((a) => `${a.symbol} ${fmtAmt(a.amountF)}`).join(" · ")}
                       </div>
+                      {b?.assets?.length ? (
+                        <div className="muted tiny byob-token-line">
+                          {b.assets.map((a) => {
+                            const sym = a.symbol || shortTx(a.address);
+                            return `${sym} BYOB ${fmtAmt(a.byobAmountF)} / Classic ${fmtAmt(a.classicAmountF)}`;
+                          }).join(" · ")}
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                   {isOpen ? (
@@ -462,33 +487,82 @@ export function AirdropsPage({
                               </div>
                             </div>
                           ) : null}
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Token</th>
-                                <th>Amount</th>
-                                <th>USD</th>
-                                <th>Recipients</th>
-                                <th>Share</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {e.assets.map((a) => (
-                                <tr key={a.address}>
-                                  <td>
-                                    <span className="swatch" style={{ background: tokenColor(a.symbol) }} />
-                                    {a.symbol || shortTx(a.address)}
-                                  </td>
-                                  <td>{fmtAmt(a.amountF)}</td>
-                                  <td>{fmtUsd(a.usd)}</td>
-                                  <td className="muted">{a.recipients?.toLocaleString() ?? "—"}</td>
-                                  <td className="muted">
-                                    {assetSum ? `${(((a.usd ?? 0) / assetSum) * 100).toFixed(1)}%` : "—"}
-                                  </td>
+                          {(b?.assets?.length ?? 0) > 0 ? (
+                            <>
+                              <h3 className="detail-subhead">Per token · BYOB vs classic</h3>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Token</th>
+                                    <th>BYOB amt</th>
+                                    <th>BYOB USD</th>
+                                    <th>BYOB wallets</th>
+                                    <th>Classic amt</th>
+                                    <th>Classic USD</th>
+                                    <th>Classic wallets</th>
+                                    <th>BYOB %</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {b!.assets!.map((a) => (
+                                    <tr key={a.address}>
+                                      <td>
+                                        <span className="swatch" style={{ background: tokenColor(a.symbol) }} />
+                                        {a.symbol || shortTx(a.address)}
+                                      </td>
+                                      <td>{fmtAmt(a.byobAmountF)}</td>
+                                      <td>{fmtUsd(a.byobUsd)}</td>
+                                      <td className="muted">{a.byobRecipients.toLocaleString()}</td>
+                                      <td>{fmtAmt(a.classicAmountF)}</td>
+                                      <td>{fmtUsd(a.classicUsd)}</td>
+                                      <td className="muted">{a.classicRecipients.toLocaleString()}</td>
+                                      <td>
+                                        <div className="stack-bar thin" aria-hidden>
+                                          <div
+                                            className="stack-byob"
+                                            style={{ width: `${(a.byobShareBps ?? 0) / 100}%` }}
+                                          />
+                                          <div
+                                            className="stack-classic"
+                                            style={{ width: `${100 - (a.byobShareBps ?? 0) / 100}%` }}
+                                          />
+                                        </div>
+                                        <div className="muted tiny">{pctBps(a.byobShareBps)}</div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </>
+                          ) : (
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Token</th>
+                                  <th>Amount</th>
+                                  <th>USD</th>
+                                  <th>Recipients</th>
+                                  <th>Share</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {e.assets.map((a) => (
+                                  <tr key={a.address}>
+                                    <td>
+                                      <span className="swatch" style={{ background: tokenColor(a.symbol) }} />
+                                      {a.symbol || shortTx(a.address)}
+                                    </td>
+                                    <td>{fmtAmt(a.amountF)}</td>
+                                    <td>{fmtUsd(a.usd)}</td>
+                                    <td className="muted">{a.recipients?.toLocaleString() ?? "—"}</td>
+                                    <td className="muted">
+                                      {assetSum ? `${(((a.usd ?? 0) / assetSum) * 100).toFixed(1)}%` : "—"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
                           <div className="detail-txs">
                             <span className="muted">Transactions</span>
                             {(e.payouts.length
