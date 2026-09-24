@@ -79,11 +79,28 @@ function pctBps(bps: number | null | undefined): string {
 }
 
 const PAGE_SIZE = 15;
+/** Fixed stack/legend order so chart colors don't reshuffle when a token dominates a cycle. */
+const TOKEN_ORDER = ["PONS", "AI", "CASHCAT"];
 const TOKEN_COLORS: Record<string, string> = {
   CASHCAT: "#c9a227",
   PONS: "#5b8def",
   AI: "#6fcf97",
 };
+
+function tokenRank(symbol: string | null | undefined): number {
+  if (!symbol) return 999;
+  const i = TOKEN_ORDER.indexOf(symbol.toUpperCase());
+  return i === -1 ? 500 : i;
+}
+
+function assetsInStableOrder(assets: AirdropAsset[]): AirdropAsset[] {
+  return [...assets].sort((a, b) => {
+    const ra = tokenRank(a.symbol);
+    const rb = tokenRank(b.symbol);
+    if (ra !== rb) return ra - rb;
+    return (a.symbol || "").localeCompare(b.symbol || "");
+  });
+}
 
 function fmtUsd(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";
@@ -180,7 +197,12 @@ export function AirdropsPage({
       recipients,
       cycles: data.epochs.length,
       avg: data.epochs.length ? paid / data.epochs.length : 0,
-      bySym: [...bySym.entries()].sort((a, b) => b[1].usd - a[1].usd),
+      bySym: [...bySym.entries()].sort((a, b) => {
+        const ra = tokenRank(a[0]);
+        const rb = tokenRank(b[0]);
+        if (ra !== rb) return ra - rb;
+        return b[1].usd - a[1].usd;
+      }),
       byobPaid,
       classicPaid,
       withByob,
@@ -239,7 +261,7 @@ export function AirdropsPage({
           </div>
           <div className="hist-bars" aria-label="Paid USD by cycle">
             {[...recent].reverse().map((e) => {
-              const assets = [...e.assets].sort((a, b) => (b.usd ?? 0) - (a.usd ?? 0));
+              const assets = assetsInStableOrder(e.assets);
               const paid = e.paidUsd ?? assets.reduce((s, a) => s + (a.usd ?? 0), 0);
               const colH = (paid / maxPaid) * 100;
               const assetSum = assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
@@ -374,7 +396,8 @@ export function AirdropsPage({
           <tbody>
             {slice.map((e) => {
               const isOpen = open === e.epoch;
-              const assetSum = e.assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
+              const rowAssets = assetsInStableOrder(e.assets);
+              const assetSum = rowAssets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
               const b = e.byob;
               const share = b?.byobShareBps;
               return (
@@ -430,7 +453,7 @@ export function AirdropsPage({
                     </td>
                     <td>
                       <div className="mini-stack">
-                        {e.assets.map((a) => (
+                        {rowAssets.map((a) => (
                           <div
                             key={a.address}
                             style={{
@@ -442,7 +465,7 @@ export function AirdropsPage({
                         ))}
                       </div>
                       <div className="muted tiny">
-                        {e.assets.map((a) => `${a.symbol} ${fmtAmt(a.amountF)}`).join(" · ")}
+                        {rowAssets.map((a) => `${a.symbol} ${fmtAmt(a.amountF)}`).join(" · ")}
                       </div>
                       {b?.assets?.length ? (
                         <div className="muted tiny byob-token-line">
