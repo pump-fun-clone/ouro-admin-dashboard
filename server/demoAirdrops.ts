@@ -70,6 +70,14 @@ export function demoAirdrops() {
         },
       ],
       meta: { txs: [tx] },
+      byob: {
+        byobRecipients: 4 + (i % 5),
+        classicRecipients: 90 + (i % 30),
+        byobUsd: paidUsd * 0.12,
+        classicUsd: paidUsd * 0.88,
+        byobShareBps: 1200,
+        receiptRecipients: 100 + (i % 40),
+      },
     };
   });
 

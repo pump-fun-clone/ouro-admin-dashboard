@@ -14,6 +14,15 @@ export type AirdropAsset = {
   recipients: number | null;
 };
 
+export type EpochByobSplit = {
+  byobRecipients: number;
+  classicRecipients: number;
+  byobUsd: number | null;
+  classicUsd: number | null;
+  byobShareBps: number | null;
+  receiptRecipients: number;
+};
+
 export type AirdropEpoch = {
   epoch: number;
   status: string;
@@ -32,6 +41,7 @@ export type AirdropEpoch = {
     assets: AirdropAsset[];
   }[];
   meta: Record<string, unknown>;
+  byob?: EpochByobSplit;
 };
 
 export type AirdropDay = {
@@ -47,7 +57,13 @@ export type AirdropsData = {
   explorer: string;
   epochs: AirdropEpoch[];
   days: AirdropDay[];
+  note?: string;
 };
+
+function pctBps(bps: number | null | undefined): string {
+  if (bps === null || bps === undefined || !Number.isFinite(bps)) return "—";
+  return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
+}
 
 const PAGE_SIZE = 15;
 const TOKEN_COLORS: Record<string, string> = {
@@ -60,6 +76,18 @@ function fmtUsd(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";
   if (Math.abs(n) >= 1000) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function byobTip(b: EpochByobSplit | undefined): string {
+  if (!b) return "No BYOB split for this cycle (needs admin receipts)";
+  return [
+    `BYOB ${b.byobRecipients} recipients · ${fmtUsd(b.byobUsd)}`,
+    `Classic ${b.classicRecipients} recipients · ${fmtUsd(b.classicUsd)}`,
+    `BYOB share ${pctBps(b.byobShareBps)} of paid USD`,
+    b.receiptRecipients ? `${b.receiptRecipients} receipt recipients` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function fmtAmt(n: number | null | undefined): string {
@@ -117,6 +145,9 @@ export function AirdropsPage({
   const totals = useMemo(() => {
     const paid = data.epochs.reduce((s, e) => s + (e.paidUsd ?? 0), 0);
     const recipients = data.epochs.reduce((s, e) => s + (e.recipients ?? 0), 0);
+    const byobPaid = data.epochs.reduce((s, e) => s + (e.byob?.byobUsd ?? 0), 0);
+    const classicPaid = data.epochs.reduce((s, e) => s + (e.byob?.classicUsd ?? 0), 0);
+    const withByob = data.epochs.filter((e) => e.byob).length;
     const bySym = new Map<string, { amountF: number; usd: number }>();
     for (const e of data.epochs) {
       for (const a of e.assets) {
@@ -133,6 +164,9 @@ export function AirdropsPage({
       cycles: data.epochs.length,
       avg: data.epochs.length ? paid / data.epochs.length : 0,
       bySym: [...bySym.entries()].sort((a, b) => b[1].usd - a[1].usd),
+      byobPaid,
+      classicPaid,
+      withByob,
     };
   }, [data.epochs]);
 
@@ -173,9 +207,10 @@ export function AirdropsPage({
           <Stat label="Paid (sum)" value={fmtUsd(totals.paid)} />
           <Stat label="Avg / cycle" value={fmtUsd(totals.avg)} />
           <Stat label="Recipients (sum)" value={totals.recipients.toLocaleString()} />
-          <Stat label="BYOB wallets" value={cohort ? String(cohort.byobWallets) : "—"} />
-          <Stat label="Classic wallets" value={cohort ? String(cohort.classicWallets) : "—"} />
+          <Stat label="BYOB paid (sum)" value={totals.withByob ? fmtUsd(totals.byobPaid) : "—"} />
+          <Stat label="Classic paid (sum)" value={totals.withByob ? fmtUsd(totals.classicPaid) : "—"} />
         </div>
+        {data.note ? <p className="muted tight">{data.note}</p> : null}
       </section>
 
       {cohort ? <CohortDonuts cohort={cohort} /> : null}
@@ -192,7 +227,10 @@ export function AirdropsPage({
               const colH = (paid / maxPaid) * 100;
               const assetSum = assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
               const breakdown = assets.map((a) => `${a.symbol} ${fmtUsd(a.usd)} (${fmtAmt(a.amountF)})`).join(" · ");
-              const colTip = `#${e.epoch} · total ${fmtUsd(e.paidUsd ?? paid)}\n${breakdown}\n${e.recipients ?? "—"} recipients`;
+              const byobLine = e.byob
+                ? `\nBYOB ${e.byob.byobRecipients} · ${fmtUsd(e.byob.byobUsd)} (${pctBps(e.byob.byobShareBps)}) · Classic ${e.byob.classicRecipients} · ${fmtUsd(e.byob.classicUsd)}`
+                : "";
+              const colTip = `#${e.epoch} · total ${fmtUsd(e.paidUsd ?? paid)}\n${breakdown}${byobLine}\n${e.recipients ?? "—"} recipients`;
               return (
                 <div key={e.epoch} className="hist-col" {...tipHandlers(tip, colTip)}>
                   <div className="hist-stack" style={{ height: `${Math.max(colH, 2)}%` }}>
@@ -310,7 +348,9 @@ export function AirdropsPage({
               <th>Cycle</th>
               <th>When</th>
               <th>Paid</th>
-              <th>Recipients</th>
+              <th>BYOB</th>
+              <th>Classic</th>
+              <th>BYOB %</th>
               <th>Breakdown</th>
             </tr>
           </thead>
@@ -318,6 +358,8 @@ export function AirdropsPage({
             {slice.map((e) => {
               const isOpen = open === e.epoch;
               const assetSum = e.assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
+              const b = e.byob;
+              const share = b?.byobShareBps;
               return (
                 <Fragment key={e.epoch}>
                   <tr className={isOpen ? "row-open" : undefined}>
@@ -336,7 +378,39 @@ export function AirdropsPage({
                     </td>
                     <td className="muted">{when(e.endTs ?? e.startTs)}</td>
                     <td>{fmtUsd(e.paidUsd)}</td>
-                    <td className="muted">{e.recipients?.toLocaleString() ?? "—"}</td>
+                    <td {...tipHandlers(tip, byobTip(b))}>
+                      {b ? (
+                        <>
+                          <div>{fmtUsd(b.byobUsd)}</div>
+                          <div className="muted tiny">{b.byobRecipients.toLocaleString()} wallets</div>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td {...tipHandlers(tip, byobTip(b))}>
+                      {b ? (
+                        <>
+                          <div>{fmtUsd(b.classicUsd)}</div>
+                          <div className="muted tiny">{b.classicRecipients.toLocaleString()} wallets</div>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td {...tipHandlers(tip, byobTip(b))}>
+                      {b ? (
+                        <>
+                          <div className="stack-bar thin" aria-hidden>
+                            <div className="stack-byob" style={{ width: `${(share ?? 0) / 100}%` }} />
+                            <div className="stack-classic" style={{ width: `${100 - (share ?? 0) / 100}%` }} />
+                          </div>
+                          <div className="muted tiny">{pctBps(share)}</div>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     <td>
                       <div className="mini-stack">
                         {e.assets.map((a) => (
@@ -357,8 +431,37 @@ export function AirdropsPage({
                   </tr>
                   {isOpen ? (
                     <tr className="detail-row">
-                      <td colSpan={6}>
+                      <td colSpan={8}>
                         <div className="detail">
+                          {b ? (
+                            <div className="byob-split-detail">
+                              <div className="pot-card">
+                                <div className="pot-top">
+                                  <strong>
+                                    <span className="swatch byob" />
+                                    BYOB
+                                  </strong>
+                                  <span>{fmtUsd(b.byobUsd)}</span>
+                                </div>
+                                <div className="muted tiny">
+                                  {b.byobRecipients.toLocaleString()} recipients · {pctBps(b.byobShareBps)} of paid
+                                </div>
+                              </div>
+                              <div className="pot-card">
+                                <div className="pot-top">
+                                  <strong>
+                                    <span className="swatch classic" />
+                                    Classic
+                                  </strong>
+                                  <span>{fmtUsd(b.classicUsd)}</span>
+                                </div>
+                                <div className="muted tiny">
+                                  {b.classicRecipients.toLocaleString()} recipients ·{" "}
+                                  {pctBps(b.byobShareBps != null ? 10_000 - b.byobShareBps : null)} of paid
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                           <table>
                             <thead>
                               <tr>

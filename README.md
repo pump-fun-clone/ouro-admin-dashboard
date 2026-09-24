@@ -41,9 +41,10 @@ MONITOR_URL=https://ouro-monitor.onrender.com
 MONITOR_ADMIN_API_KEY=long-random-secret
 ```
 
-Monitor route (Bearer `ADMIN_API_KEY`):
+Monitor routes (Bearer `ADMIN_API_KEY`):
 
-`GET /v1/admin/byob/metrics`
+- `GET /v1/admin/byob/metrics`
+- `GET /v1/admin/airdrops?limit=` — airdrop history with per-cycle BYOB vs classic (reconstructed from prefs + receipts)
 
 ## Auth notes
 

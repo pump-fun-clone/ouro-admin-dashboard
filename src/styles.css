@@ -263,6 +263,12 @@ body {
   background: var(--track);
 }
 
+.stack-bar.thin {
+  height: 6px;
+  min-width: 72px;
+  margin-bottom: 4px;
+}
+
 .stack-byob {
   background: linear-gradient(90deg, #8a7020, var(--accent));
   height: 100%;
@@ -271,6 +277,13 @@ body {
 .stack-classic {
   background: #3a3832;
   height: 100%;
+}
+
+.byob-split-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .pot-meta {

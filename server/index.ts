@@ -112,36 +112,53 @@ function buildApi(): Hono {
     if (!currentUser(c.req.header("cookie"))) return c.json({ error: "unauthorized" }, 401);
 
     const limitRaw = c.req.query("limit");
-    const beforeRaw = c.req.query("before");
     const limit = Math.min(200, Math.max(1, Number.parseInt(limitRaw || "60", 10) || 60));
-    const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
 
     if (!monitorUrl) {
       return c.json({ ...demoAirdrops(), source: "demo" as const });
     }
 
     try {
-      const epochsQs = new URLSearchParams({ limit: String(limit) });
-      if (Number.isFinite(before)) epochsQs.set("before", String(before));
-      const [epochsRes, dailyRes, healthRes] = await Promise.all([
-        fetch(`${monitorUrl}/v1/ouro/epochs?${epochsQs}`, { headers: { accept: "application/json" } }),
-        fetch(`${monitorUrl}/v1/ouro/daily?days=14`, { headers: { accept: "application/json" } }),
-        fetch(`${monitorUrl}/v1/summary`, { headers: { accept: "application/json" } }),
-      ]);
+      const dailyRes = fetch(`${monitorUrl}/v1/ouro/daily?days=14`, { headers: { accept: "application/json" } });
 
+      if (monitorKey) {
+        const [adminRes, daily] = await Promise.all([
+          fetch(`${monitorUrl}/v1/admin/airdrops?limit=${limit}`, {
+            headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
+          }),
+          dailyRes,
+        ]);
+        if (!adminRes.ok) {
+          const text = await adminRes.text();
+          return c.json({ error: "monitor admin airdrops error", status: adminRes.status, body: text.slice(0, 300) }, 502);
+        }
+        const adminBody = (await adminRes.json()) as {
+          explorer?: string;
+          epochs?: unknown[];
+          note?: string;
+        };
+        const dailyBody = daily.ok ? ((await daily.json()) as { days?: unknown[] }) : { days: [] };
+        return c.json({
+          source: "monitor" as const,
+          explorer: adminBody.explorer || "https://robinhoodchain.blockscout.com",
+          epochs: adminBody.epochs ?? [],
+          days: dailyBody.days ?? [],
+          note: adminBody.note,
+        });
+      }
+
+      const [epochsRes, daily] = await Promise.all([
+        fetch(`${monitorUrl}/v1/ouro/epochs?limit=${limit}`, { headers: { accept: "application/json" } }),
+        dailyRes,
+      ]);
       if (!epochsRes.ok) {
         return c.json({ error: "monitor epochs error", status: epochsRes.status }, 502);
       }
       const epochsBody = (await epochsRes.json()) as { epochs?: unknown[] };
-      const dailyBody = dailyRes.ok ? ((await dailyRes.json()) as { days?: unknown[] }) : { days: [] };
-      const summary = healthRes.ok ? ((await healthRes.json()) as { chain?: { explorer?: string } }) : {};
-      const explorer =
-        summary.chain?.explorer ||
-        "https://robinhoodchain.blockscout.com";
-
+      const dailyBody = daily.ok ? ((await daily.json()) as { days?: unknown[] }) : { days: [] };
       return c.json({
         source: "monitor" as const,
-        explorer,
+        explorer: "https://robinhoodchain.blockscout.com",
         epochs: epochsBody.epochs ?? [],
         days: dailyBody.days ?? [],
       });
