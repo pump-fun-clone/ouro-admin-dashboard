@@ -181,7 +181,7 @@ export function AirdropsPage({
       {cohort ? <CohortDonuts cohort={cohort} /> : null}
 
       <div className="charts-row">
-        <section className="panel">
+        <section className="panel chart-wide">
           <div className="panel-head">
             <h2>Paid USD by cycle</h2>
           </div>
@@ -192,7 +192,7 @@ export function AirdropsPage({
               const colH = (paid / maxPaid) * 100;
               const assetSum = assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
               const breakdown = assets.map((a) => `${a.symbol} ${fmtUsd(a.usd)} (${fmtAmt(a.amountF)})`).join(" · ");
-              const colTip = `#${e.epoch} · ${fmtUsd(e.paidUsd)} · ${e.recipients ?? "—"} recipients · ${breakdown}`;
+              const colTip = `#${e.epoch} · total ${fmtUsd(e.paidUsd ?? paid)}\n${breakdown}\n${e.recipients ?? "—"} recipients`;
               return (
                 <div key={e.epoch} className="hist-col" {...tipHandlers(tip, colTip)}>
                   <div className="hist-stack" style={{ height: `${Math.max(colH, 2)}%` }}>
@@ -204,7 +204,6 @@ export function AirdropsPage({
                           flex: `${Math.max(a.usd ?? 0, 0.0001) / assetSum} 0 0`,
                           background: tokenColor(a.symbol),
                         }}
-                        {...tipHandlers(tip, `${a.symbol}: ${fmtUsd(a.usd)} · ${fmtAmt(a.amountF)} tokens`)}
                       />
                     ))}
                   </div>
@@ -222,28 +221,28 @@ export function AirdropsPage({
             ))}
           </div>
         </section>
-
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Daily paid</h2>
-          </div>
-          <div className="hist-bars daily" aria-label="Daily paid USD">
-            {data.days.map((d) => {
-              const t = `${dayLabel(d.day)} · ${fmtUsd(d.paid_usd)} · ${d.epochs} cycles · ${(d.recipients ?? 0).toLocaleString()} recipients`;
-              return (
-                <div key={d.day} className="hist-col" {...tipHandlers(tip, t)}>
-                  <div
-                    className="hist-bar-solid"
-                    style={{ height: `${Math.max(((d.paid_usd ?? 0) / dayMax) * 100, 2)}%` }}
-                  />
-                  <span className="hist-label">{dayLabel(d.day)}</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="muted tight">Last {data.days.length} days of closed airdrop USD.</p>
-        </section>
       </div>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Daily paid</h2>
+        </div>
+        <div className="hist-bars daily" aria-label="Daily paid USD">
+          {data.days.map((d) => {
+            const t = `${dayLabel(d.day)} · ${fmtUsd(d.paid_usd)} · ${d.epochs} cycles · ${(d.recipients ?? 0).toLocaleString()} recipients`;
+            return (
+              <div key={d.day} className="hist-col" {...tipHandlers(tip, t)}>
+                <div
+                  className="hist-bar-solid"
+                  style={{ height: `${Math.max(((d.paid_usd ?? 0) / dayMax) * 100, 2)}%` }}
+                />
+                <span className="hist-label">{dayLabel(d.day)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="muted tight">Last {data.days.length} days of closed airdrop USD.</p>
+      </section>
 
       <section className="panel">
         <div className="panel-head">

@@ -389,8 +389,21 @@ body {
 }
 
 .hist-bars.daily .hist-col {
-  min-width: 40px;
-  max-width: 72px;
+  min-width: 48px;
+  max-width: 96px;
+}
+
+.chart-wide {
+  grid-column: 1 / -1;
+}
+
+.hist-bars.daily {
+  gap: 12px;
+  min-height: 160px;
+}
+
+.hist-bars.daily .hist-col {
+  flex: 1 1 0;
 }
 
 .hist-stack {
