@@ -3,11 +3,11 @@ export function demoByobMetrics() {
   const cash = "0x1111111111111111111111111111111111111111";
   const pons = "0x2222222222222222222222222222222222222222";
   const ai = "0x3333333333333333333333333333333333333333";
+  const ouro = (n: number) => BigInt(Math.floor(n * 1e18)).toString();
   return {
     cycle: 208,
     delayCycles: 2,
-    allocateEnabled: false,
-    swapEnabled: false,
+    explorer: "https://robinhoodchain.blockscout.com",
     basket: [
       { symbol: "CASHCAT", address: cash, decimals: 18 },
       { symbol: "PONS", address: pons, decimals: 18 },
@@ -18,6 +18,19 @@ export function demoByobMetrics() {
     pendingCount: 1,
     pendingClassicCount: 0,
     pendingCustomCount: 1,
+    cohort: {
+      eligibleWallets: 40,
+      byobWallets: 4,
+      classicWallets: 36,
+      totalOuro: ouro(12_000_000),
+      byobOuro: ouro(2_400_000),
+      classicOuro: ouro(9_600_000),
+      byobOuroShareBps: 2000,
+      classicOuroShareBps: 8000,
+      dividendLine: ouro(100_000),
+      potUsd: 18420.5,
+      potUpdatedAt: Math.floor(Date.now() / 1000) - 120,
+    },
     tokens: [
       {
         symbol: "CASHCAT",
@@ -27,6 +40,11 @@ export function demoByobMetrics() {
         walletsAbove0: 4,
         walletsAbove50pct: 3,
         walletsAt100pct: 2,
+        potRaw: ouro(500_000),
+        potAmount: 500_000,
+        potUsd: 8200,
+        byobDemandBpsOfPot: 4500,
+        classicRemainderBpsOfPot: 5500,
       },
       {
         symbol: "PONS",
@@ -36,6 +54,11 @@ export function demoByobMetrics() {
         walletsAbove0: 2,
         walletsAbove50pct: 0,
         walletsAt100pct: 0,
+        potRaw: ouro(300_000),
+        potAmount: 300_000,
+        potUsd: 6100,
+        byobDemandBpsOfPot: 1200,
+        classicRemainderBpsOfPot: 8800,
       },
       {
         symbol: "AI",
@@ -45,13 +68,17 @@ export function demoByobMetrics() {
         walletsAbove0: 1,
         walletsAbove50pct: 0,
         walletsAt100pct: 0,
+        potRaw: ouro(200_000),
+        potAmount: 200_000,
+        potUsd: 4120,
+        byobDemandBpsOfPot: 800,
+        classicRemainderBpsOfPot: 9200,
       },
     ],
     allInOneToken: [
       { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", symbol: "CASHCAT", weightBps: 10000 },
       { address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", symbol: "CASHCAT", weightBps: 10000 },
     ],
-    note: "Demo data. Set MONITOR_URL + MONITOR_ADMIN_API_KEY to read live prefs.",
     recentAudit: [
       {
         id: 3,
@@ -70,6 +97,7 @@ export function demoByobMetrics() {
         submittedCycle: 207,
         effectiveFromCycle: 209,
         submittedAt: Math.floor(Date.now() / 1000) - 1800,
+        ouro: ouro(150_000),
       },
     ],
     active: [
@@ -78,24 +106,28 @@ export function demoByobMetrics() {
         weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
         updatedAt: Math.floor(Date.now() / 1000) - 86400,
         updatedCycle: 200,
+        ouro: ouro(800_000),
       },
       {
         address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         weights: { [cash]: 10000, [pons]: 0, [ai]: 0 },
         updatedAt: Math.floor(Date.now() / 1000) - 72000,
         updatedCycle: 201,
+        ouro: ouro(600_000),
       },
       {
         address: "0xeeeeaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         weights: { [cash]: 3334, [pons]: 3333, [ai]: 3333 },
         updatedAt: Math.floor(Date.now() / 1000) - 40000,
         updatedCycle: 205,
+        ouro: ouro(500_000),
       },
       {
         address: "0xffffffffffffffffffffffffffffffffffffffff",
         weights: { [cash]: 1666, [pons]: 3334, [ai]: 5000 },
         updatedAt: Math.floor(Date.now() / 1000) - 10000,
         updatedCycle: 206,
+        ouro: ouro(500_000),
       },
     ],
   };

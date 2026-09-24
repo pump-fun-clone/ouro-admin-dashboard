@@ -88,7 +88,7 @@ function buildApi(): Hono {
     }
 
     try {
-      const res = await fetch(`${monitorUrl}/v1/admin/byob/metrics?auditLimit=50`, {
+      const res = await fetch(`${monitorUrl}/v1/admin/byob/metrics?auditLimit=200`, {
         headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
       });
       const text = await res.text();
