@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
+import { AirdropsPage, type AirdropsData } from "./pages/Airdrops";
 import { ByobPage, type ByobMetrics } from "./pages/Byob";
 import { LoginPage } from "./pages/Login";
 
 type Me = { authenticated: true; username: string } | { authenticated: false };
+type Tab = "byob" | "airdrops";
 
 async function fetchMe(): Promise<Me> {
   const res = await fetch("/api/me", { credentials: "include" });
@@ -46,9 +48,7 @@ export function App() {
           me.authenticated ? (
             <Navigate to="/" replace />
           ) : (
-            <LoginPage
-              onSuccess={(username) => setMe({ authenticated: true, username })}
-            />
+            <LoginPage onSuccess={(username) => setMe({ authenticated: true, username })} />
           )
         }
       />
@@ -56,10 +56,7 @@ export function App() {
         path="/"
         element={
           me.authenticated ? (
-            <AuthedShell
-              username={me.username}
-              onLogout={() => setMe({ authenticated: false })}
-            />
+            <AuthedShell username={me.username} onLogout={() => setMe({ authenticated: false })} />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -71,7 +68,9 @@ export function App() {
 }
 
 function AuthedShell({ username, onLogout }: { username: string; onLogout: () => void }) {
+  const [tab, setTab] = useState<Tab>("byob");
   const [metrics, setMetrics] = useState<ByobMetrics | null>(null);
+  const [airdrops, setAirdrops] = useState<AirdropsData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -79,14 +78,20 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch("/api/byob/metrics", { credentials: "include" });
-      if (res.status === 401) {
+      const [mRes, aRes] = await Promise.all([
+        fetch("/api/byob/metrics", { credentials: "include" }),
+        fetch("/api/airdrops?limit=60", { credentials: "include" }),
+      ]);
+      if (mRes.status === 401 || aRes.status === 401) {
         onLogout();
         return;
       }
-      const body = (await res.json()) as ByobMetrics & { error?: string };
-      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-      setMetrics(body);
+      const mBody = (await mRes.json()) as ByobMetrics & { error?: string };
+      const aBody = (await aRes.json()) as AirdropsData & { error?: string };
+      if (!mRes.ok) throw new Error(mBody.error || `BYOB HTTP ${mRes.status}`);
+      if (!aRes.ok) throw new Error(aBody.error || `Airdrops HTTP ${aRes.status}`);
+      setMetrics(mBody);
+      setAirdrops(aBody);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -108,7 +113,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
       <header className="top">
         <div>
           <div className="brand">Ouro Admin</div>
-          <div className="sub">BYOB monitoring</div>
+          <div className="sub">Operator dashboard</div>
         </div>
         <div className="top-right">
           <span className="muted">{username}</span>
@@ -120,9 +125,24 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
           </button>
         </div>
       </header>
+
+      <nav className="tabs" aria-label="Sections">
+        <button type="button" className={tab === "byob" ? "tab on" : "tab"} onClick={() => setTab("byob")}>
+          BYOB
+        </button>
+        <button
+          type="button"
+          className={tab === "airdrops" ? "tab on" : "tab"}
+          onClick={() => setTab("airdrops")}
+        >
+          Airdrops
+        </button>
+      </nav>
+
       {err ? <p className="err">{err}</p> : null}
-      {loading && !metrics ? <p className="muted">Loading metrics…</p> : null}
-      {metrics ? <ByobPage data={metrics} /> : null}
+      {loading && !metrics && !airdrops ? <p className="muted">Loading…</p> : null}
+      {tab === "byob" && metrics ? <ByobPage data={metrics} /> : null}
+      {tab === "airdrops" && airdrops ? <AirdropsPage data={airdrops} /> : null}
     </div>
   );
 }

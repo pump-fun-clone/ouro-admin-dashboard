@@ -8,6 +8,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { ViteDevServer } from "vite";
 
 import { demoByobMetrics } from "./demo";
+import { demoAirdrops } from "./demoAirdrops";
 import {
   mintSession,
   parseCookieHeader,
@@ -102,6 +103,48 @@ function buildApi(): Hono {
         return c.json({ error: "monitor error", status: res.status, body }, 502);
       }
       return c.json({ ...(body as object), source: "monitor" as const });
+    } catch (e) {
+      return c.json({ error: "failed to reach monitor", detail: (e as Error).message }, 502);
+    }
+  });
+
+  app.get("/api/airdrops", async (c) => {
+    if (!currentUser(c.req.header("cookie"))) return c.json({ error: "unauthorized" }, 401);
+
+    const limitRaw = c.req.query("limit");
+    const beforeRaw = c.req.query("before");
+    const limit = Math.min(200, Math.max(1, Number.parseInt(limitRaw || "60", 10) || 60));
+    const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
+
+    if (!monitorUrl) {
+      return c.json({ ...demoAirdrops(), source: "demo" as const });
+    }
+
+    try {
+      const epochsQs = new URLSearchParams({ limit: String(limit) });
+      if (Number.isFinite(before)) epochsQs.set("before", String(before));
+      const [epochsRes, dailyRes, healthRes] = await Promise.all([
+        fetch(`${monitorUrl}/v1/ouro/epochs?${epochsQs}`, { headers: { accept: "application/json" } }),
+        fetch(`${monitorUrl}/v1/ouro/daily?days=14`, { headers: { accept: "application/json" } }),
+        fetch(`${monitorUrl}/v1/summary`, { headers: { accept: "application/json" } }),
+      ]);
+
+      if (!epochsRes.ok) {
+        return c.json({ error: "monitor epochs error", status: epochsRes.status }, 502);
+      }
+      const epochsBody = (await epochsRes.json()) as { epochs?: unknown[] };
+      const dailyBody = dailyRes.ok ? ((await dailyRes.json()) as { days?: unknown[] }) : { days: [] };
+      const summary = healthRes.ok ? ((await healthRes.json()) as { chain?: { explorer?: string } }) : {};
+      const explorer =
+        summary.chain?.explorer ||
+        "https://robinhoodchain.blockscout.com";
+
+      return c.json({
+        source: "monitor" as const,
+        explorer,
+        epochs: epochsBody.epochs ?? [],
+        days: dailyBody.days ?? [],
+      });
     } catch (e) {
       return c.json({ error: "failed to reach monitor", detail: (e as Error).message }, 502);
     }
