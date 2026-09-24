@@ -1,4 +1,5 @@
-import { tipHandlers, useTip } from "../lib/tooltip";
+import { TipPanel, TipRow, tipHandlers, useTip } from "../lib/tooltip";
+import type { ReactNode } from "react";
 
 export function CohortDonuts({
   cohort,
@@ -23,7 +24,12 @@ export function CohortDonuts({
           b={cohort.classicWallets}
           aLabel={`BYOB ${cohort.byobWallets}`}
           bLabel={`Classic ${cohort.classicWallets}`}
-          tipText={`BYOB ${cohort.byobWallets} wallets · Classic ${cohort.classicWallets} wallets (eligible)`}
+          tip={
+            <TipPanel title="Eligible wallets">
+              <TipRow label="BYOB" value={cohort.byobWallets.toLocaleString()} />
+              <TipRow label="Classic" value={cohort.classicWallets.toLocaleString()} />
+            </TipPanel>
+          }
         />
         <p className="muted tight">Eligible holders at or above the airdrop line.</p>
       </section>
@@ -36,7 +42,15 @@ export function CohortDonuts({
           b={cohort.classicOuroShareBps}
           aLabel={`BYOB ${pct(cohort.byobOuroShareBps)}`}
           bLabel={`Classic ${pct(cohort.classicOuroShareBps)}`}
-          tipText={`BYOB ${pct(cohort.byobOuroShareBps)} of eligible OURO · Classic ${pct(cohort.classicOuroShareBps)}`}
+          tip={
+            <TipPanel title="Eligible OURO">
+              <TipRow label="BYOB" value={`${pct(cohort.byobOuroShareBps)} · ${fmtOuro(cohort.byobOuro)}`} />
+              <TipRow
+                label="Classic"
+                value={`${pct(cohort.classicOuroShareBps)} · ${fmtOuro(cohort.classicOuro)}`}
+              />
+            </TipPanel>
+          }
         />
         <p className="muted tight">
           Share of eligible OURO · BYOB {fmtOuro(cohort.byobOuro)} / Classic {fmtOuro(cohort.classicOuro)}
@@ -66,19 +80,19 @@ function Donut({
   b,
   aLabel,
   bLabel,
-  tipText,
+  tip,
 }: {
   a: number;
   b: number;
   aLabel: string;
   bLabel: string;
-  tipText: string;
+  tip: ReactNode;
 }) {
-  const tip = useTip();
+  const tipApi = useTip();
   const total = a + b;
   const aPct = total > 0 ? (a / total) * 100 : 50;
   return (
-    <div className="donut-wrap" {...tipHandlers(tip, tipText)}>
+    <div className="donut-wrap" {...tipHandlers(tipApi, tip)}>
       <div
         className="donut"
         style={{

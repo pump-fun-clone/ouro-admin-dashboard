@@ -1,7 +1,7 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 
 import { CohortDonuts } from "../components/CohortDonuts";
-import { tipHandlers, useTip } from "../lib/tooltip";
+import { TipMuted, TipPanel, TipRow, TipSection, tipHandlers, useTip } from "../lib/tooltip";
 import type { ByobMetrics } from "./Byob";
 
 export type AirdropAsset = {
@@ -108,20 +108,95 @@ function fmtUsd(n: number | null | undefined): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function byobTip(b: EpochByobSplit | undefined): string {
-  if (!b) return "No BYOB split for this cycle (needs admin receipts)";
-  const lines = [
-    `BYOB ${b.byobRecipients} recipients · ${fmtUsd(b.byobUsd)}`,
-    `Classic ${b.classicRecipients} recipients · ${fmtUsd(b.classicUsd)}`,
-    `BYOB share ${pctBps(b.byobShareBps)} of paid USD`,
-  ];
-  for (const a of b.assets ?? []) {
-    const sym = a.symbol || a.address.slice(0, 8);
-    lines.push(
-      `${sym}: BYOB ${fmtAmt(a.byobAmountF)} (${fmtUsd(a.byobUsd)}) · Classic ${fmtAmt(a.classicAmountF)} (${fmtUsd(a.classicUsd)}) · ${pctBps(a.byobShareBps)} BYOB`,
+function byobTip(b: EpochByobSplit | undefined): ReactNode {
+  if (!b) {
+    return (
+      <TipPanel title="BYOB split">
+        <TipMuted>No split for this cycle yet (needs admin receipts).</TipMuted>
+      </TipPanel>
     );
   }
-  return lines.join("\n");
+  return (
+    <TipPanel title="BYOB vs classic">
+      <TipSection title="Totals">
+        <TipRow label="BYOB" value={`${fmtUsd(b.byobUsd)} · ${b.byobRecipients.toLocaleString()} wallets`} />
+        <TipRow
+          label="Classic"
+          value={`${fmtUsd(b.classicUsd)} · ${b.classicRecipients.toLocaleString()} wallets`}
+        />
+        <TipRow label="BYOB share" value={pctBps(b.byobShareBps)} />
+      </TipSection>
+      {(b.assets?.length ?? 0) > 0 ? (
+        <TipSection title="Per token">
+          {b.assets!.map((a) => {
+            const sym = a.symbol || a.address.slice(0, 8);
+            return (
+              <div key={a.address} className="tip-token-block">
+                <div className="tip-token-name">
+                  <span className="swatch" style={{ background: tokenColor(a.symbol) }} />
+                  {sym}
+                  <span className="tip-token-share">{pctBps(a.byobShareBps)} BYOB</span>
+                </div>
+                <TipRow label="BYOB" value={`${fmtAmt(a.byobAmountF)} · ${fmtUsd(a.byobUsd)}`} />
+                <TipRow label="Classic" value={`${fmtAmt(a.classicAmountF)} · ${fmtUsd(a.classicUsd)}`} />
+              </div>
+            );
+          })}
+        </TipSection>
+      ) : null}
+    </TipPanel>
+  );
+}
+
+function cycleTip(
+  epoch: number,
+  paid: number | null,
+  recipients: number | null | undefined,
+  assets: AirdropAsset[],
+  byob: EpochByobSplit | undefined,
+): ReactNode {
+  return (
+    <TipPanel title={`Cycle #${epoch}`}>
+      <TipSection title="Paid">
+        <TipRow label="Total" value={fmtUsd(paid)} />
+        <TipRow label="Recipients" value={(recipients ?? 0).toLocaleString()} />
+      </TipSection>
+      <TipSection title="Tokens">
+        {assets.map((a) => (
+          <TipRow
+            key={a.address}
+            label={a.symbol || shortTx(a.address)}
+            value={`${fmtAmt(a.amountF)} · ${fmtUsd(a.usd)}`}
+          />
+        ))}
+      </TipSection>
+      {byob ? (
+        <TipSection title="BYOB">
+          <TipRow label="BYOB" value={`${fmtUsd(byob.byobUsd)} · ${pctBps(byob.byobShareBps)}`} />
+          <TipRow label="Classic" value={fmtUsd(byob.classicUsd)} />
+        </TipSection>
+      ) : null}
+    </TipPanel>
+  );
+}
+
+function assetTip(a: AirdropAsset, byobAsset?: EpochByobAssetSplit): ReactNode {
+  const sym = a.symbol || shortTx(a.address);
+  return (
+    <TipPanel title={sym}>
+      <TipRow label="Paid" value={`${fmtAmt(a.amountF)} · ${fmtUsd(a.usd)}`} />
+      {byobAsset ? (
+        <>
+          <TipRow label="BYOB" value={`${fmtAmt(byobAsset.byobAmountF)} · ${fmtUsd(byobAsset.byobUsd)}`} />
+          <TipRow
+            label="Classic"
+            value={`${fmtAmt(byobAsset.classicAmountF)} · ${fmtUsd(byobAsset.classicUsd)}`}
+          />
+          <TipRow label="BYOB %" value={pctBps(byobAsset.byobShareBps)} />
+        </>
+      ) : null}
+    </TipPanel>
+  );
 }
 
 function fmtAmt(n: number | null | undefined): string {
@@ -265,13 +340,12 @@ export function AirdropsPage({
               const paid = e.paidUsd ?? assets.reduce((s, a) => s + (a.usd ?? 0), 0);
               const colH = (paid / maxPaid) * 100;
               const assetSum = assets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
-              const breakdown = assets.map((a) => `${a.symbol} ${fmtUsd(a.usd)} (${fmtAmt(a.amountF)})`).join(" · ");
-              const byobLine = e.byob
-                ? `\nBYOB ${e.byob.byobRecipients} · ${fmtUsd(e.byob.byobUsd)} (${pctBps(e.byob.byobShareBps)}) · Classic ${e.byob.classicRecipients} · ${fmtUsd(e.byob.classicUsd)}`
-                : "";
-              const colTip = `#${e.epoch} · total ${fmtUsd(e.paidUsd ?? paid)}\n${breakdown}${byobLine}\n${e.recipients ?? "—"} recipients`;
               return (
-                <div key={e.epoch} className="hist-col" {...tipHandlers(tip, colTip)}>
+                <div
+                  key={e.epoch}
+                  className="hist-col"
+                  {...tipHandlers(tip, cycleTip(e.epoch, e.paidUsd ?? paid, e.recipients, assets, e.byob))}
+                >
                   <div className="hist-stack" style={{ height: `${Math.max(colH, 2)}%` }}>
                     {assets.map((a) => (
                       <div
@@ -306,9 +380,15 @@ export function AirdropsPage({
         </div>
         <div className="hist-bars daily" aria-label="Daily paid USD">
           {data.days.map((d) => {
-            const t = `${dayLabel(d.day)} · ${fmtUsd(d.paid_usd)} · ${d.epochs} cycles · ${(d.recipients ?? 0).toLocaleString()} recipients`;
+            const tipContent = (
+              <TipPanel title={dayLabel(d.day)}>
+                <TipRow label="Paid" value={fmtUsd(d.paid_usd)} />
+                <TipRow label="Cycles" value={String(d.epochs)} />
+                <TipRow label="Recipients" value={(d.recipients ?? 0).toLocaleString()} />
+              </TipPanel>
+            );
             return (
-              <div key={d.day} className="hist-col" {...tipHandlers(tip, t)}>
+              <div key={d.day} className="hist-col" {...tipHandlers(tip, tipContent)}>
                 <div
                   className="hist-bar-solid"
                   style={{ height: `${Math.max(((d.paid_usd ?? 0) / dayMax) * 100, 2)}%` }}
@@ -330,7 +410,14 @@ export function AirdropsPage({
             <div
               key={sym}
               className="pot-card"
-              {...tipHandlers(tip, `${sym}: ${fmtUsd(v.usd)} · ${fmtAmt(v.amountF)} tokens across ${totals.cycles} cycles`)}
+              {...tipHandlers(
+                tip,
+                <TipPanel title={sym}>
+                  <TipRow label="USD" value={fmtUsd(v.usd)} />
+                  <TipRow label="Amount" value={fmtAmt(v.amountF)} />
+                  <TipRow label="Across" value={`${totals.cycles} cycles`} />
+                </TipPanel>,
+              )}
             >
               <div className="pot-top">
                 <strong>
@@ -452,29 +539,53 @@ export function AirdropsPage({
                       )}
                     </td>
                     <td>
-                      <div className="mini-stack">
-                        {rowAssets.map((a) => (
-                          <div
-                            key={a.address}
-                            style={{
-                              width: `${((a.usd ?? 0) / assetSum) * 100}%`,
-                              background: tokenColor(a.symbol),
-                            }}
-                            {...tipHandlers(tip, `${a.symbol}: ${fmtUsd(a.usd)} · ${fmtAmt(a.amountF)}`)}
-                          />
-                        ))}
-                      </div>
-                      <div className="muted tiny">
-                        {rowAssets.map((a) => `${a.symbol} ${fmtAmt(a.amountF)}`).join(" · ")}
-                      </div>
-                      {b?.assets?.length ? (
-                        <div className="muted tiny byob-token-line">
-                          {b.assets.map((a) => {
-                            const sym = a.symbol || shortTx(a.address);
-                            return `${sym} BYOB ${fmtAmt(a.byobAmountF)} / Classic ${fmtAmt(a.classicAmountF)}`;
-                          }).join(" · ")}
+                      <div className="breakdown-cell">
+                        <div className="mini-stack">
+                          {rowAssets.map((a) => {
+                            const ba = b?.assets?.find(
+                              (x) => x.address.toLowerCase() === a.address.toLowerCase(),
+                            );
+                            return (
+                              <div
+                                key={a.address}
+                                style={{
+                                  width: `${((a.usd ?? 0) / assetSum) * 100}%`,
+                                  background: tokenColor(a.symbol),
+                                }}
+                                {...tipHandlers(tip, assetTip(a, ba))}
+                              />
+                            );
+                          })}
                         </div>
-                      ) : null}
+                        <ul className="token-lines">
+                          {rowAssets.map((a) => {
+                            const ba = b?.assets?.find(
+                              (x) => x.address.toLowerCase() === a.address.toLowerCase(),
+                            );
+                            const sym = a.symbol || shortTx(a.address);
+                            return (
+                              <li key={a.address} {...tipHandlers(tip, assetTip(a, ba))}>
+                                <span className="token-line-head">
+                                  <span className="swatch" style={{ background: tokenColor(a.symbol) }} />
+                                  <strong>{sym}</strong>
+                                  <span className="muted">{fmtAmt(a.amountF)}</span>
+                                  <span className="muted">{fmtUsd(a.usd)}</span>
+                                </span>
+                                {ba ? (
+                                  <span className="token-line-split">
+                                    <span>
+                                      BYOB <strong>{fmtAmt(ba.byobAmountF)}</strong>
+                                    </span>
+                                    <span>
+                                      Classic <strong>{fmtAmt(ba.classicAmountF)}</strong>
+                                    </span>
+                                  </span>
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
                     </td>
                   </tr>
                   {isOpen ? (

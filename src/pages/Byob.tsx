@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { CohortDonuts } from "../components/CohortDonuts";
-import { tipHandlers, useTip } from "../lib/tooltip";
+import { TipPanel, TipRow, tipHandlers, useTip } from "../lib/tooltip";
 
 export type ByobMetrics = {
   source?: "demo" | "monitor";
@@ -278,9 +278,20 @@ export function ByobPage({ data }: { data: ByobMetrics }) {
           {data.tokens.map((t) => {
             const demand = t.byobDemandBpsOfPot ?? 0;
             const rem = t.classicRemainderBpsOfPot ?? Math.max(0, 10_000 - demand);
-            const tipText = `${t.symbol}: pot ${fmtNum(t.potAmount)}${t.potUsd != null ? ` ($${fmtNum(t.potUsd)})` : ""} · BYOB claims ${pct(demand)} · classic left ${pct(rem)} · pref avg ${pct(t.avgWeightBps)} · ${t.walletsAt100pct} all-in`;
+            const tipContent = (
+              <TipPanel title={t.symbol}>
+                <TipRow
+                  label="Pot"
+                  value={`${fmtNum(t.potAmount)}${t.potUsd != null ? ` · $${fmtNum(t.potUsd)}` : ""}`}
+                />
+                <TipRow label="BYOB claims" value={pct(demand)} />
+                <TipRow label="Classic left" value={pct(rem)} />
+                <TipRow label="Pref avg" value={pct(t.avgWeightBps)} />
+                <TipRow label="All-in" value={`${t.walletsAt100pct} wallets`} />
+              </TipPanel>
+            );
             return (
-              <div key={t.address} className="pot-card" {...tipHandlers(tip, tipText)}>
+              <div key={t.address} className="pot-card" {...tipHandlers(tip, tipContent)}>
                 <div className="pot-top">
                   <strong>{t.symbol}</strong>
                   <span className="muted">

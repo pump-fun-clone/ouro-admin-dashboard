@@ -301,6 +301,83 @@ body {
   line-height: 1.35;
 }
 
+.breakdown-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.token-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.token-lines li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: default;
+}
+
+.token-line-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-line-head strong {
+  min-width: 4.5rem;
+}
+
+.token-line-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding-left: 18px;
+  font-size: 0.75rem;
+  color: #9a9488;
+}
+
+.token-line-split strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tip-token-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 4px;
+}
+
+.tip-token-block + .tip-token-block {
+  border-top: 1px solid #2e2c28;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.tip-token-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.tip-token-share {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #9a9488;
+}
+
 .pot-meta {
   display: flex;
   justify-content: space-between;
@@ -465,16 +542,74 @@ body {
   position: fixed;
   z-index: 1000;
   pointer-events: none;
-  max-width: min(320px, calc(100vw - 24px));
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #0e0d0c;
-  border: 1px solid #4a453c;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #12110f;
+  border: 1px solid #5a5448;
   color: var(--ink);
-  font-size: 0.8rem;
-  line-height: 1.35;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.tip-plain {
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tip-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.tip-title {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #3a3730;
+}
+
+.tip-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tip-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9a9488;
+}
+
+.tip-row {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) 1fr;
+  gap: 10px 14px;
+  align-items: baseline;
+}
+
+.tip-label {
+  color: #9a9488;
+  font-size: 0.78rem;
+}
+
+.tip-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-word;
+}
+
+.tip-muted {
+  color: #8a857c;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .token-legend {
