@@ -1,6 +1,7 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { CohortDonuts } from "../components/CohortDonuts";
+import { SortTh, type SortDir } from "../components/SortTh";
 import { TipMuted, TipPanel, TipRow, TipSection, tipHandlers, useTip } from "../lib/tooltip";
 import type { ByobMetrics } from "./Byob";
 
@@ -69,8 +70,15 @@ export type AirdropsData = {
   source?: "demo" | "monitor";
   explorer: string;
   epochs: AirdropEpoch[];
+  chartEpochs?: AirdropEpoch[];
   days: AirdropDay[];
   note?: string;
+  total?: number;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  sort?: string;
+  dir?: "asc" | "desc";
 };
 
 function pctBps(bps: number | null | undefined): string {
@@ -239,26 +247,85 @@ function txUrl(explorer: string, tx: string): string {
 export function AirdropsPage({
   data,
   cohort,
+  refreshKey = 0,
 }: {
   data: AirdropsData;
   cohort?: ByobMetrics["cohort"];
+  refreshKey?: number;
 }) {
   const tip = useTip();
   const [query, setQuery] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState("epoch");
+  const [dir, setDir] = useState<SortDir>("desc");
   const [open, setOpen] = useState<number | null>(null);
+  const [epochs, setEpochs] = useState<AirdropEpoch[]>(data.epochs);
+  const [total, setTotal] = useState(data.total ?? data.epochs.length);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState(data.note);
+  const [explorer, setExplorer] = useState(data.explorer);
+  const [chartEpochs, setChartEpochs] = useState<AirdropEpoch[]>(data.chartEpochs ?? data.epochs);
 
-  const recent = data.epochs.slice(0, 24);
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(query.trim()), 200);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQ, sort, dir]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const offset = page * PAGE_SIZE;
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+      q: debouncedQ,
+      sort,
+      dir,
+      chartLimit: "24",
+    });
+    setLoading(true);
+    setErr(null);
+    void fetch(`/api/airdrops?${params}`, { credentials: "include" })
+      .then(async (res) => {
+        const body = (await res.json()) as AirdropsData & { error?: string };
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        if (cancelled) return;
+        setEpochs(body.epochs ?? []);
+        setTotal(body.total ?? body.epochs?.length ?? 0);
+        setChartEpochs(body.chartEpochs ?? body.epochs ?? []);
+        setNote(body.note);
+        setExplorer(body.explorer);
+        if (body.sort) setSort(body.sort);
+        if (body.dir === "asc" || body.dir === "desc") setDir(body.dir);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setErr((e as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, debouncedQ, sort, dir, refreshKey]);
+
+  const recent = chartEpochs.slice(0, 24);
   const maxPaid = Math.max(1, ...recent.map((e) => e.paidUsd ?? 0));
 
   const totals = useMemo(() => {
-    const paid = data.epochs.reduce((s, e) => s + (e.paidUsd ?? 0), 0);
-    const recipients = data.epochs.reduce((s, e) => s + (e.recipients ?? 0), 0);
-    const byobPaid = data.epochs.reduce((s, e) => s + (e.byob?.byobUsd ?? 0), 0);
-    const classicPaid = data.epochs.reduce((s, e) => s + (e.byob?.classicUsd ?? 0), 0);
-    const withByob = data.epochs.filter((e) => e.byob).length;
+    const paid = chartEpochs.reduce((s, e) => s + (e.paidUsd ?? 0), 0);
+    const recipients = chartEpochs.reduce((s, e) => s + (e.recipients ?? 0), 0);
+    const byobPaid = chartEpochs.reduce((s, e) => s + (e.byob?.byobUsd ?? 0), 0);
+    const classicPaid = chartEpochs.reduce((s, e) => s + (e.byob?.classicUsd ?? 0), 0);
+    const withByob = chartEpochs.filter((e) => e.byob).length;
     const bySym = new Map<string, { amountF: number; usd: number }>();
-    for (const e of data.epochs) {
+    for (const e of chartEpochs) {
       for (const a of e.assets) {
         const sym = a.symbol || a.address.slice(0, 8);
         const cur = bySym.get(sym) || { amountF: 0, usd: 0 };
@@ -270,8 +337,8 @@ export function AirdropsPage({
     return {
       paid,
       recipients,
-      cycles: data.epochs.length,
-      avg: data.epochs.length ? paid / data.epochs.length : 0,
+      cycles: chartEpochs.length,
+      avg: chartEpochs.length ? paid / chartEpochs.length : 0,
       bySym: [...bySym.entries()].sort((a, b) => {
         const ra = tokenRank(a[0]);
         const rb = tokenRank(b[0]);
@@ -282,28 +349,21 @@ export function AirdropsPage({
       classicPaid,
       withByob,
     };
-  }, [data.epochs]);
+  }, [chartEpochs]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return data.epochs;
-    return data.epochs.filter((e) => {
-      const hay = [
-        String(e.epoch),
-        e.status,
-        ...e.assets.map((a) => a.symbol || ""),
-        ...((e.meta.txs as string[] | undefined) || []),
-        ...e.payouts.map((p) => p.tx),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [data.epochs, query]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
-  const slice = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  const toggleSort = useCallback((col: string) => {
+    setSort((prev) => {
+      if (prev === col) {
+        setDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setDir("desc");
+      return col;
+    });
+  }, []);
 
   const dayMax = Math.max(1, ...data.days.map((d) => d.paid_usd ?? 0));
 
@@ -317,14 +377,14 @@ export function AirdropsPage({
           </span>
         </div>
         <div className="stats">
-          <Stat label="Cycles shown" value={String(totals.cycles)} />
-          <Stat label="Paid (sum)" value={fmtUsd(totals.paid)} />
+          <Stat label="Chart cycles" value={String(totals.cycles)} />
+          <Stat label="Paid (chart)" value={fmtUsd(totals.paid)} />
           <Stat label="Avg / cycle" value={fmtUsd(totals.avg)} />
-          <Stat label="Recipients (sum)" value={totals.recipients.toLocaleString()} />
-          <Stat label="BYOB paid (sum)" value={totals.withByob ? fmtUsd(totals.byobPaid) : "—"} />
-          <Stat label="Classic paid (sum)" value={totals.withByob ? fmtUsd(totals.classicPaid) : "—"} />
+          <Stat label="All cycles" value={total.toLocaleString()} />
+          <Stat label="BYOB paid (chart)" value={totals.withByob ? fmtUsd(totals.byobPaid) : "—"} />
+          <Stat label="Classic paid (chart)" value={totals.withByob ? fmtUsd(totals.classicPaid) : "—"} />
         </div>
-        {data.note ? <p className="muted tight">{data.note}</p> : null}
+        {note ? <p className="muted tight">{note}</p> : null}
       </section>
 
       {cohort ? <CohortDonuts cohort={cohort} /> : null}
@@ -403,7 +463,7 @@ export function AirdropsPage({
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Token totals (loaded cycles)</h2>
+          <h2>Token totals (chart cycles)</h2>
         </div>
         <div className="pot-grid">
           {totals.bySym.map(([sym, v]) => (
@@ -443,45 +503,48 @@ export function AirdropsPage({
             className="search"
             type="search"
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter cycle, token, tx…"
           />
           <div className="pager">
             <span className="muted">
-              {filtered.length} · page {safePage + 1}/{pageCount}
+              {loading ? "…" : total} · page {safePage + 1}/{pageCount}
             </span>
-            <button type="button" className="btn ghost sm" disabled={safePage <= 0} onClick={() => setPage(safePage - 1)}>
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={safePage <= 0 || loading}
+              onClick={() => setPage(safePage - 1)}
+            >
               Prev
             </button>
             <button
               type="button"
               className="btn ghost sm"
-              disabled={safePage >= pageCount - 1}
+              disabled={safePage >= pageCount - 1 || loading}
               onClick={() => setPage(safePage + 1)}
             >
               Next
             </button>
           </div>
         </div>
+        {err ? <p className="err">{err}</p> : null}
 
         <table>
           <thead>
             <tr>
               <th></th>
-              <th>Cycle</th>
-              <th>When</th>
-              <th>Paid</th>
-              <th>BYOB</th>
-              <th>Classic</th>
-              <th>BYOB %</th>
+              <SortTh label="Cycle" col="epoch" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="When" col="endTs" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="Paid" col="paidUsd" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="BYOB" col="byobUsd" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="Classic" col="classicUsd" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="BYOB %" col="byobShareBps" sort={sort} dir={dir} onSort={toggleSort} />
               <th>Breakdown</th>
             </tr>
           </thead>
           <tbody>
-            {slice.map((e) => {
+            {epochs.map((e) => {
               const isOpen = open === e.epoch;
               const rowAssets = assetsInStableOrder(e.assets);
               const assetSum = rowAssets.reduce((s, a) => s + (a.usd ?? 0), 0) || 1;
@@ -706,7 +769,7 @@ export function AirdropsPage({
                               <a
                                 key={tx}
                                 className="mono addr-link"
-                                href={txUrl(data.explorer, tx)}
+                                href={txUrl(explorer, tx)}
                                 target="_blank"
                                 rel="noreferrer"
                                 {...tipHandlers(tip, tx)}
@@ -731,6 +794,7 @@ export function AirdropsPage({
     </div>
   );
 }
+
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

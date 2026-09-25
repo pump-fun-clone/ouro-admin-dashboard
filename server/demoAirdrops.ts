@@ -1,5 +1,20 @@
 /** Demo airdrop history when MONITOR_URL is unset. */
-export function demoAirdrops() {
+export function demoAirdrops(
+  opts: {
+    limit?: number;
+    offset?: number;
+    q?: string;
+    sort?: string;
+    dir?: string;
+    chartLimit?: number;
+  } = {},
+) {
+  const limit = opts.limit ?? 15;
+  const offset = opts.offset ?? 0;
+  const q = (opts.q || "").trim().toLowerCase();
+  const sort = opts.sort || "epoch";
+  const dir = opts.dir === "asc" ? "asc" : "desc";
+  const chartLimit = opts.chartLimit ?? 24;
   const cash = "0x020bfc650a365f8bb26819deaabf3e21291018b4";
   const pons = "0x39dbed3a2bd333467115de45665cc57f813c4571";
   const ai = "0x2e8c31162b855a2ffa90f6f8634643ad6f111e18";
@@ -129,9 +144,45 @@ export function demoAirdrops() {
     };
   });
 
+  const chartEpochs = [...epochs].sort((a, b) => b.epoch - a.epoch).slice(0, chartLimit);
+  let filtered = q
+    ? epochs.filter((e) => {
+        const hay = [String(e.epoch), e.status, ...e.assets.map((a) => a.symbol || "")].join(" ").toLowerCase();
+        return hay.includes(q);
+      })
+    : [...epochs];
+  filtered.sort((a, b) => {
+    const val = (e: (typeof epochs)[number]) => {
+      if (sort === "paidUsd") return e.paidUsd ?? -1;
+      if (sort === "recipients") return e.recipients ?? -1;
+      if (sort === "endTs") return e.endTs ?? -1;
+      if (sort === "status") return e.status;
+      if (sort === "byobUsd") return e.byob?.byobUsd ?? -1;
+      if (sort === "classicUsd") return e.byob?.classicUsd ?? -1;
+      if (sort === "byobShareBps") return e.byob?.byobShareBps ?? -1;
+      if (sort === "byobRecipients") return e.byob?.byobRecipients ?? -1;
+      if (sort === "classicRecipients") return e.byob?.classicRecipients ?? -1;
+      return e.epoch;
+    };
+    const av = val(a);
+    const bv = val(b);
+    if (typeof av === "string" && typeof bv === "string") {
+      const cmp = av.localeCompare(bv);
+      return dir === "asc" ? cmp : -cmp;
+    }
+    return dir === "asc" ? Number(av) - Number(bv) : Number(bv) - Number(av);
+  });
+
   return {
     explorer: "https://robinhoodchain.blockscout.com",
-    epochs,
+    chartEpochs,
+    epochs: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+    limit,
+    offset,
+    q,
+    sort,
+    dir,
     days,
   };
 }

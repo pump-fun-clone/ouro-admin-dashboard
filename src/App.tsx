@@ -85,7 +85,9 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
     try {
       const [mRes, aRes] = await Promise.all([
         fetch("/api/byob/metrics", { credentials: "include" }),
-        fetch("/api/airdrops?limit=60", { credentials: "include" }),
+        fetch("/api/airdrops?limit=15&offset=0&sort=epoch&dir=desc&chartLimit=24", {
+          credentials: "include",
+        }),
       ]);
       if (mRes.status === 401 || aRes.status === 401) {
         onLogout();
@@ -150,7 +152,7 @@ function AuthedShell({ username, onLogout }: { username: string; onLogout: () =>
       {loading && !metrics && !airdrops ? <p className="muted">Loading…</p> : null}
       {tab === "byob" && metrics ? <ByobPage data={metrics} refreshKey={refreshKey} /> : null}
       {tab === "airdrops" && airdrops ? (
-        <AirdropsPage data={airdrops} cohort={metrics?.cohort} />
+        <AirdropsPage data={airdrops} cohort={metrics?.cohort} refreshKey={refreshKey} />
       ) : null}
     </div>
   );

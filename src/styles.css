@@ -444,8 +444,31 @@ body {
   font-size: 0.85rem;
 }
 
-.tiny {
-  font-size: 0.78rem;
+.sort-th {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sort-th:hover,
+.sort-th.on {
+  color: var(--ink);
+}
+
+.sort-ind {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.sort-th.on .sort-ind {
+  color: var(--accent);
 }
 
 .table-tools {

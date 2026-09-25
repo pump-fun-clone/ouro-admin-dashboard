@@ -144,9 +144,37 @@ export function demoByobMetrics() {
   };
 }
 
-function pageRows<T>(rows: T[], limit: number, offset: number, match: (row: T, q: string) => boolean, q: string) {
+function pageRows<T>(
+  rows: T[],
+  limit: number,
+  offset: number,
+  match: (row: T, q: string) => boolean,
+  q: string,
+  sortKey?: (row: T) => string | number | boolean | null | undefined,
+  dir: string = "desc",
+) {
   const needle = q.trim().toLowerCase();
-  const filtered = needle ? rows.filter((r) => match(r, needle)) : rows;
+  let filtered = needle ? rows.filter((r) => match(r, needle)) : [...rows];
+  if (sortKey) {
+    const asc = dir.toLowerCase() === "asc";
+    filtered = filtered.sort((a, b) => {
+      const av = sortKey(a);
+      const bv = sortKey(b);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "boolean" && typeof bv === "boolean") {
+        const an = av ? 1 : 0;
+        const bn = bv ? 1 : 0;
+        return asc ? an - bn : bn - an;
+      }
+      if (typeof av === "number" && typeof bv === "number") {
+        return asc ? av - bv : bv - av;
+      }
+      const cmp = String(av).localeCompare(String(bv));
+      return asc ? cmp : -cmp;
+    });
+  }
   return {
     total: filtered.length,
     limit,
@@ -157,11 +185,21 @@ function pageRows<T>(rows: T[], limit: number, offset: number, match: (row: T, q
 }
 
 /** Demo stand-in for GET /api/byob/rows. */
-export function demoByobRows(table: string, limit: number, offset: number, q: string) {
+export function demoByobRows(
+  table: string,
+  limit: number,
+  offset: number,
+  q: string,
+  sort = "",
+  dir = "desc",
+) {
   const kind = table.trim().toLowerCase();
   if (kind === "active") {
+    const key = sort || "updatedAt";
     return {
       table: kind,
+      sort: key,
+      dir: dir === "asc" ? "asc" : "desc",
       ...pageRows(
         demoActive,
         limit,
@@ -169,12 +207,24 @@ export function demoByobRows(table: string, limit: number, offset: number, q: st
         (r, needle) =>
           r.address.toLowerCase().includes(needle) || JSON.stringify(r.weights).toLowerCase().includes(needle),
         q,
+        (r) =>
+          key === "address"
+            ? r.address
+            : key === "ouro"
+              ? Number(r.ouro) / 1e18
+              : key === "updatedCycle"
+                ? r.updatedCycle
+                : r.updatedAt,
+        dir,
       ),
     };
   }
   if (kind === "pending") {
+    const key = sort || "submittedAt";
     return {
       table: kind,
+      sort: key,
+      dir: dir === "asc" ? "asc" : "desc",
       ...pageRows(
         demoPending,
         limit,
@@ -183,12 +233,28 @@ export function demoByobRows(table: string, limit: number, offset: number, q: st
           r.address.toLowerCase().includes(needle) ||
           (r.classic ? "classic" : JSON.stringify(r.weights)).toLowerCase().includes(needle),
         q,
+        (r) =>
+          key === "address"
+            ? r.address
+            : key === "ouro"
+              ? Number(r.ouro) / 1e18
+              : key === "classic"
+                ? r.classic
+                : key === "effectiveFromCycle"
+                  ? r.effectiveFromCycle
+                  : key === "submittedCycle"
+                    ? r.submittedCycle
+                    : r.submittedAt,
+        dir,
       ),
     };
   }
   if (kind === "audit") {
+    const key = sort || "id";
     return {
       table: kind,
+      sort: key,
+      dir: dir === "asc" ? "asc" : "desc",
       ...pageRows(
         demoAudit,
         limit,
@@ -198,18 +264,34 @@ export function demoByobRows(table: string, limit: number, offset: number, q: st
           r.kind.toLowerCase().includes(needle) ||
           String(r.cycle).includes(needle),
         q,
+        (r) =>
+          key === "address"
+            ? r.address
+            : key === "kind"
+              ? r.kind
+              : key === "cycle"
+                ? r.cycle
+                : key === "ts"
+                  ? r.ts
+                  : r.id,
+        dir,
       ),
     };
   }
   if (kind === "all_in") {
+    const key = sort || "symbol";
     return {
       table: kind,
+      sort: key,
+      dir: dir === "asc" ? "asc" : "desc",
       ...pageRows(
         demoAllIn,
         limit,
         offset,
         (r, needle) => r.address.toLowerCase().includes(needle) || r.symbol.toLowerCase().includes(needle),
         q,
+        (r) => (key === "address" ? r.address : r.symbol),
+        dir,
       ),
     };
   }

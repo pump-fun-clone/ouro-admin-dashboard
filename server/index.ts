@@ -115,11 +115,13 @@ function buildApi(): Hono {
     const limitRaw = c.req.query("limit");
     const offsetRaw = c.req.query("offset");
     const q = c.req.query("q") || "";
+    const sort = c.req.query("sort") || "";
+    const dir = c.req.query("dir") || "";
     const limit = Math.min(100, Math.max(1, Number.parseInt(limitRaw || "15", 10) || 15));
     const offset = Math.max(0, Number.parseInt(offsetRaw || "0", 10) || 0);
 
     if (!monitorUrl || !monitorKey) {
-      const demo = demoByobRows(table, limit, offset, q);
+      const demo = demoByobRows(table, limit, offset, q, sort, dir);
       if ("error" in demo && demo.error) return c.json(demo, 400);
       return c.json(demo);
     }
@@ -130,6 +132,8 @@ function buildApi(): Hono {
         limit: String(limit),
         offset: String(offset),
         q,
+        sort,
+        dir,
       });
       const res = await fetch(`${monitorUrl}/v1/admin/byob/rows?${params}`, {
         headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
@@ -153,19 +157,31 @@ function buildApi(): Hono {
   app.get("/api/airdrops", async (c) => {
     if (!currentUser(c.req.header("cookie"))) return c.json({ error: "unauthorized" }, 401);
 
-    const limitRaw = c.req.query("limit");
-    const limit = Math.min(200, Math.max(1, Number.parseInt(limitRaw || "60", 10) || 60));
+    const limit = Math.min(100, Math.max(1, Number.parseInt(c.req.query("limit") || "15", 10) || 15));
+    const offset = Math.max(0, Number.parseInt(c.req.query("offset") || "0", 10) || 0);
+    const q = c.req.query("q") || "";
+    const sort = c.req.query("sort") || "epoch";
+    const dir = c.req.query("dir") || "desc";
+    const chartLimit = Math.min(48, Math.max(1, Number.parseInt(c.req.query("chartLimit") || "24", 10) || 24));
 
     if (!monitorUrl) {
-      return c.json({ ...demoAirdrops(), source: "demo" as const });
+      return c.json({ ...demoAirdrops({ limit, offset, q, sort, dir, chartLimit }), source: "demo" as const });
     }
 
     try {
       const dailyRes = fetch(`${monitorUrl}/v1/ouro/daily?days=14`, { headers: { accept: "application/json" } });
 
       if (monitorKey) {
+        const qs = new URLSearchParams({
+          limit: String(limit),
+          offset: String(offset),
+          q,
+          sort,
+          dir,
+          chartLimit: String(chartLimit),
+        });
         const [adminRes, daily] = await Promise.all([
-          fetch(`${monitorUrl}/v1/admin/airdrops?limit=${limit}`, {
+          fetch(`${monitorUrl}/v1/admin/airdrops?${qs}`, {
             headers: { authorization: `Bearer ${monitorKey}`, accept: "application/json" },
           }),
           dailyRes,
@@ -174,23 +190,28 @@ function buildApi(): Hono {
           const text = await adminRes.text();
           return c.json({ error: "monitor admin airdrops error", status: adminRes.status, body: text.slice(0, 300) }, 502);
         }
-        const adminBody = (await adminRes.json()) as {
-          explorer?: string;
-          epochs?: unknown[];
-          note?: string;
-        };
+        const adminBody = (await adminRes.json()) as Record<string, unknown>;
         const dailyBody = daily.ok ? ((await daily.json()) as { days?: unknown[] }) : { days: [] };
         return c.json({
           source: "monitor" as const,
-          explorer: adminBody.explorer || "https://robinhoodchain.blockscout.com",
+          explorer: (adminBody.explorer as string) || "https://robinhoodchain.blockscout.com",
+          chartEpochs: adminBody.chartEpochs ?? adminBody.epochs ?? [],
           epochs: adminBody.epochs ?? [],
+          total: adminBody.total ?? ((adminBody.epochs as unknown[]) || []).length,
+          limit: adminBody.limit ?? limit,
+          offset: adminBody.offset ?? offset,
+          q: adminBody.q ?? q,
+          sort: adminBody.sort ?? sort,
+          dir: adminBody.dir ?? dir,
           days: dailyBody.days ?? [],
           note: adminBody.note,
         });
       }
 
       const [epochsRes, daily] = await Promise.all([
-        fetch(`${monitorUrl}/v1/ouro/epochs?limit=${limit}`, { headers: { accept: "application/json" } }),
+        fetch(`${monitorUrl}/v1/ouro/epochs?limit=${Math.max(limit, chartLimit)}`, {
+          headers: { accept: "application/json" },
+        }),
         dailyRes,
       ]);
       if (!epochsRes.ok) {
@@ -198,10 +219,18 @@ function buildApi(): Hono {
       }
       const epochsBody = (await epochsRes.json()) as { epochs?: unknown[] };
       const dailyBody = daily.ok ? ((await daily.json()) as { days?: unknown[] }) : { days: [] };
+      const all = epochsBody.epochs ?? [];
       return c.json({
         source: "monitor" as const,
         explorer: "https://robinhoodchain.blockscout.com",
-        epochs: epochsBody.epochs ?? [],
+        chartEpochs: all.slice(0, chartLimit),
+        epochs: all.slice(offset, offset + limit),
+        total: all.length,
+        limit,
+        offset,
+        q,
+        sort,
+        dir,
         days: dailyBody.days ?? [],
       });
     } catch (e) {

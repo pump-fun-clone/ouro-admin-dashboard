@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { CohortDonuts } from "../components/CohortDonuts";
+import { SortTh, type SortDir } from "../components/SortTh";
 import { TipPanel, TipRow, tipHandlers, useTip } from "../lib/tooltip";
 
 export type ByobMetrics = {
@@ -80,12 +81,21 @@ type PageResult<T> = {
   query: string;
   setQuery: (q: string) => void;
   setPage: (p: number) => void;
+  sort: string;
+  dir: SortDir;
+  toggleSort: (col: string) => void;
   loading: boolean;
   err: string | null;
 };
 
 const PAGE_SIZE = 15;
 const EXPLORER_FALLBACK = "https://robinhoodchain.blockscout.com";
+const DEFAULT_SORT: Record<ByobTable, string> = {
+  active: "updatedAt",
+  pending: "submittedAt",
+  audit: "id",
+  all_in: "symbol",
+};
 
 function pct(bps: number): string {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
@@ -157,6 +167,8 @@ function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> 
   const [page, setPage] = useState(0);
   const [query, setQueryState] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [sort, setSort] = useState(DEFAULT_SORT[table]);
+  const [dir, setDir] = useState<SortDir>("desc");
   const [rows, setRows] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -169,7 +181,7 @@ function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> 
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedQ]);
+  }, [debouncedQ, sort, dir]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,16 +191,26 @@ function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> 
       limit: String(PAGE_SIZE),
       offset: String(offset),
       q: debouncedQ,
+      sort,
+      dir,
     });
     setLoading(true);
     setErr(null);
     void fetch(`/api/byob/rows?${params}`, { credentials: "include" })
       .then(async (res) => {
-        const body = (await res.json()) as { rows?: T[]; total?: number; error?: string };
+        const body = (await res.json()) as {
+          rows?: T[];
+          total?: number;
+          error?: string;
+          sort?: string;
+          dir?: SortDir;
+        };
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         if (cancelled) return;
         setRows(body.rows ?? []);
         setTotal(body.total ?? 0);
+        if (body.sort) setSort(body.sort);
+        if (body.dir === "asc" || body.dir === "desc") setDir(body.dir);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -202,13 +224,24 @@ function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> 
     return () => {
       cancelled = true;
     };
-  }, [table, page, debouncedQ, refreshKey]);
+  }, [table, page, debouncedQ, sort, dir, refreshKey]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
 
   const setQuery = useCallback((q: string) => {
     setQueryState(q);
+  }, []);
+
+  const toggleSort = useCallback((col: string) => {
+    setSort((prev) => {
+      if (prev === col) {
+        setDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setDir("desc");
+      return col;
+    });
   }, []);
 
   return {
@@ -219,6 +252,9 @@ function useServerPaged<T>(table: ByobTable, refreshKey: number): PageResult<T> 
     query,
     setQuery,
     setPage,
+    sort,
+    dir,
+    toggleSort,
     loading,
     err,
   };
@@ -384,8 +420,8 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
           <table>
             <thead>
               <tr>
-                <th>Wallet</th>
-                <th>Token</th>
+                <SortTh label="Wallet" col="address" sort={allInPaged.sort} dir={allInPaged.dir} onSort={allInPaged.toggleSort} />
+                <SortTh label="Token" col="symbol" sort={allInPaged.sort} dir={allInPaged.dir} onSort={allInPaged.toggleSort} />
               </tr>
             </thead>
             <tbody>
@@ -420,10 +456,10 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
         <table>
           <thead>
             <tr>
-              <th>Wallet</th>
-              <th>OURO</th>
+              <SortTh label="Wallet" col="address" sort={activePaged.sort} dir={activePaged.dir} onSort={activePaged.toggleSort} />
+              <SortTh label="OURO" col="ouro" sort={activePaged.sort} dir={activePaged.dir} onSort={activePaged.toggleSort} />
               <th>Weights</th>
-              <th>Updated</th>
+              <SortTh label="Updated" col="updatedCycle" sort={activePaged.sort} dir={activePaged.dir} onSort={activePaged.toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -462,9 +498,15 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
           <table>
             <thead>
               <tr>
-                <th>Wallet</th>
-                <th>Change</th>
-                <th>Effective</th>
+                <SortTh label="Wallet" col="address" sort={pendingPaged.sort} dir={pendingPaged.dir} onSort={pendingPaged.toggleSort} />
+                <SortTh label="Change" col="classic" sort={pendingPaged.sort} dir={pendingPaged.dir} onSort={pendingPaged.toggleSort} />
+                <SortTh
+                  label="Effective"
+                  col="effectiveFromCycle"
+                  sort={pendingPaged.sort}
+                  dir={pendingPaged.dir}
+                  onSort={pendingPaged.toggleSort}
+                />
               </tr>
             </thead>
             <tbody>
@@ -503,10 +545,10 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
           <table>
             <thead>
               <tr>
-                <th>When</th>
-                <th>Kind</th>
-                <th>Wallet</th>
-                <th>Cycle</th>
+                <SortTh label="When" col="ts" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
+                <SortTh label="Kind" col="kind" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
+                <SortTh label="Wallet" col="address" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
+                <SortTh label="Cycle" col="cycle" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
               </tr>
             </thead>
             <tbody>
