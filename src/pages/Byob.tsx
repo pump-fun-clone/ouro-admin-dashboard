@@ -67,7 +67,7 @@ type AuditRow = {
   kind: string;
   cycle: number;
   ts: number;
-  weights: unknown;
+  weights: Record<string, number> | { classic: true } | null;
 };
 type AllInRow = { address: string; symbol: string; weightBps: number };
 
@@ -403,6 +403,11 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
         <div className="panel-head">
           <h2>All-in wallets</h2>
         </div>
+        <p className="muted tight">
+          Active BYOB wallets that put 100% of their bag on a single basket token. Useful as a
+          concentration early-warning: lots of all-in on one token means pot demand can pile onto
+          that asset first.
+        </p>
         <TableToolbar
           query={allInPaged.query}
           onQuery={allInPaged.setQuery}
@@ -442,6 +447,10 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
         <div className="panel-head">
           <h2>Active prefs</h2>
         </div>
+        <p className="muted tight">
+          Wallets currently on BYOB (preference already live for allocation). Shows eligible OURO
+          balance and the basket weights that apply now. Classic holders are not listed here.
+        </p>
         <TableToolbar
           query={activePaged.query}
           onQuery={activePaged.setQuery}
@@ -481,6 +490,10 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
         <div className="panel-head">
           <h2>Pending</h2>
         </div>
+        <p className="muted tight">
+          Submitted preference changes waiting for the delay window. Includes new BYOB bags and
+          classic reverts; they take effect from the listed cycle.
+        </p>
         <TableToolbar
           query={pendingPaged.query}
           onQuery={pendingPaged.setQuery}
@@ -528,6 +541,11 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
         <div className="panel-head">
           <h2>Recent audit</h2>
         </div>
+        <p className="muted tight">
+          Append-only event log of preference changes: pending submit, cancel, activate, and
+          activate_classic. Active and Pending show current state only; use this to see who flipped
+          when.
+        </p>
         <TableToolbar
           query={auditPaged.query}
           onQuery={auditPaged.setQuery}
@@ -548,6 +566,7 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
                 <SortTh label="When" col="ts" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
                 <SortTh label="Kind" col="kind" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
                 <SortTh label="Wallet" col="address" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
+                <th>Detail</th>
                 <SortTh label="Cycle" col="cycle" sort={auditPaged.sort} dir={auditPaged.dir} onSort={auditPaged.toggleSort} />
               </tr>
             </thead>
@@ -558,6 +577,11 @@ export function ByobPage({ data, refreshKey = 0 }: { data: ByobMetrics; refreshK
                   <td>{r.kind}</td>
                   <td>
                     <AddrLink address={r.address} explorer={explorer} />
+                  </td>
+                  <td className="muted">
+                    {r.weights && typeof r.weights === "object" && "classic" in (r.weights as object)
+                      ? "revert classic"
+                      : weightLine(r.weights as Record<string, number> | null, data.basket)}
                   </td>
                   <td className="muted">{r.cycle}</td>
                 </tr>
